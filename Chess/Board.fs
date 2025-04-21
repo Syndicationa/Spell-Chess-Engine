@@ -5,8 +5,17 @@ module Hexuple =
     let toList (a, b, c, d, e, f) = [a; b; c; d; e; f]
 
 type Color = 
+    | Nil = 0
     | White = 8
     | Black = 16
+
+module Color = 
+    let oppositeColor color = 
+        match color with
+        | Color.Nil -> Color.Nil
+        | Color.White -> Color.Black
+        | Color.Black -> Color.White
+        | _ -> Color.Nil
 
 type PieceType = 
 | King = 0
@@ -21,6 +30,15 @@ type Piece = byte
 module Piece = 
     let generate (color: Color) (piece: PieceType): Piece =
         byte color ||| byte piece
+
+    let color (piece: Piece): Color =
+        enum (int piece &&& 0b11000)
+
+    let pieceType (piece: Piece): PieceType =
+        enum (int piece &&& 7)
+
+    let promote (piece: Piece) (target: PieceType) =
+        generate (color piece) target
 
     let toString piece =
         match piece with
@@ -97,7 +115,7 @@ module Piece =
 //         | x -> None
 
 type Player = {
-    KingLocation: byte
+    KingLocation: int
     Castling: bool * bool
 }
 
@@ -130,8 +148,8 @@ module Location =
         let rank: Rank = enum (int (str.[1] - '1'))
         Some (file, rank)
 
-    let toByte (file: File, rank: Rank) =
-        (byte rank <<< 3) + byte file
+    let toInt (file: File, rank: Rank) =
+        (int rank <<< 3) + int file
 
 type CastleDirection = 
     | KingSide
@@ -157,7 +175,7 @@ type Board = {
     Board: byte[]
     White: Player
     Black: Player
-    EnPassant: byte option
+    EnPassant: int option
     HalfmoveCount: int
     Moves: Move list
 }
@@ -165,7 +183,7 @@ type Board = {
 module Board = 
     let create (fen: string) = 
         let Board = Array.create 64 0uy
-        let mutable wKing, bKing = 0uy, 0uy;
+        let mutable wKing, bKing = -1, -1;
         let mutable idx = 56
 
         let pieces, active, castling, enPassant, halfMove = 
@@ -178,10 +196,10 @@ module Board =
             else
             match char with 
                 | 'K' -> 
-                    wKing <- byte idx
+                    wKing <- idx
                     Piece.generate Color.White PieceType.King
                 | 'k' -> 
-                    bKing <- byte idx
+                    bKing <- idx
                     Piece.generate Color.Black PieceType.King
                 | 'Q' -> Piece.generate Color.White PieceType.Queen
                 | 'q' -> Piece.generate Color.Black PieceType.Queen
@@ -223,7 +241,7 @@ module Board =
         let enPassantTarget = 
             enPassant
             |> Location.fromString
-            |> Option.map Location.toByte 
+            |> Option.map Location.toInt 
 
         let HalfmoveCount = int halfMove
 
@@ -338,6 +356,12 @@ module Move =
             Array.set board.Board move.Target pieceType //See above on why this is okay
             board
 
+        let private updateKing move board =
+            if Piece.pieceType move.Piece <> PieceType.King then board
+            else
+            {Board.getPlayer board with KingLocation = move.Target}
+            |> Board.setPlayer <| board
+
         let private nextPlayer (board: Board) =
             let nextPlayer = 
                 match board.ActiveColor with
@@ -370,6 +394,7 @@ module Move =
             | CapturePromotion (_, pieceType) -> 
                 normalMove board move
                 |> promote move pieceType
+            |> updateKing move
             |> nextPlayer
             |> fiftyMoveRule move
             |> fun x -> {x with Moves = move :: x.Moves}

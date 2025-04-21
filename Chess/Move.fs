@@ -15,24 +15,19 @@ namespace SpellChess.Chess
             -1, -2
         ]
 
-        let private generateNormalsAndCaptures board location piece =
-            let flags = PieceBoards.getPieceAtLocation (Board.getOpponent board).Pieces location
-                        |> Option.map (fun piece -> Capture piece)
-                        |> Option.defaultValue Normal 
-            
-            fun newLocation -> {Piece = piece; Source = location; Target = newLocation; Flags = flags}
+        let private generateNormalsAndCaptures board location piece =            
+            fun newLocation -> {
+                Piece = piece
+                Source = location
+                Target = newLocation
+                Flags = 
+                    match board.Board.[newLocation] with
+                    | 0uy -> Normal
+                    | piece -> Capture piece            
+            }
             |> List.map
 
-        let private generateSideInts board =
-            let white = Array.fold (fun a i -> a ||| i) 0uL (Hexuple.toArray board.White.Pieces)
-            let black = Array.fold (fun a i -> a ||| i) 0uL (Hexuple.toArray board.Black.Pieces)
-
-            match board.Player with
-            | Side.White -> white, black
-            | Side.Black -> black, white
-            | _ -> white, white
-
-        let rec private findCapture friendly enemy position depth (d_file, d_rank) =
+        let rec private findCapture board targetPiece position depth (d_file, d_rank) =
             let new_rank = position / 8 + d_rank
             let new_file = position % 8 + d_file
 
@@ -40,70 +35,63 @@ namespace SpellChess.Chess
             else
 
             match new_rank * 8 + new_file with
-            | n when 1uL <<< n &&& enemy <> 0uL -> true
-            | n when 1uL <<< n &&& friendly <> 0uL -> false
-            | n -> findCapture friendly enemy n (depth - 1) (d_file, d_rank)
+            | n when Piece.color board.Board.[n] = Color.Nil -> findCapture board targetPiece n (depth - 1) (d_file, d_rank)
+            | n when board.Board[n] = targetPiece -> true
+            | _ -> false
         
-        let rec private squaresInDirection friendly enemy position depth list (d_file, d_rank) =
+        let rec private squaresInDirection board start position depth list (d_file, d_rank) =
             let new_rank = (position >>> 3) + d_rank
             let new_file = (position &&& 7) + d_file
 
             if new_rank > 7 || new_rank < 0 || new_file > 7 || new_file < 0 || depth = 0 then list
             else
 
-            // if d_file = 2 || d_file = -2 || d_rank = 2 || d_rank = -1
-            //     then 
-            //         printfn "%i + %i -> %i" position ((d_rank <<< 3) + d_file) ((new_rank <<< 3) + new_file)
-            //         printfn "%i %i + (%i %i) -> %i %i" (position >>> 3) (position &&& 7) d_rank d_file new_rank new_file
-            //         printfn "Is Valid: %b" (1uL <<< (new_rank <<< 3) + new_file &&& friendly = 0uL)
+            let color = Piece.color board.Board.[start]
 
             match (new_rank <<< 3) + new_file with
-            | n when 1uL <<< n &&& friendly <> 0uL -> list
-            | n when 1uL <<< n &&& enemy <> 0uL -> n :: list
-            | n -> squaresInDirection friendly enemy n (depth - 1) (n :: list) (d_file, d_rank)
+            | n when Piece.color board.Board.[n] = Color.Nil -> 
+                squaresInDirection board start n (depth - 1) (n :: list) (d_file, d_rank)
+            | n when Piece.color board.Board.[n] = color -> list
+            | n -> n :: list
 
         let private linearMoves (board: Board) (location: int) (piece: Piece) =
-            let friendly, opponent= generateSideInts board
-
             let depth, list = 
-                match piece with
-                | Piece.King -> 1, queenDirections
-                | Piece.Queen -> 8, queenDirections
-                | Piece.Rook -> 8, rookDirections
-                | Piece.Bishop -> 8, bishopDirections
-                | Piece.Knight -> 1, knightDirections
+                match enum (int piece &&& 7) with
+                | PieceType.King -> 1, queenDirections
+                | PieceType.Queen -> 8, queenDirections
+                | PieceType.Rook -> 8, rookDirections
+                | PieceType.Bishop -> 8, bishopDirections
+                | PieceType.Knight -> 1, knightDirections
                 | _ -> 0, []
 
             list
-            |> List.fold (squaresInDirection friendly opponent location depth) []
+            |> List.fold (squaresInDirection board location location depth) []
             |> generateNormalsAndCaptures board location piece
 
-        let private castlingMoves (board: Board) (location: int): Move list = 
-            let friendly, opponent = generateSideInts board
-            let allPieces = friendly ||| opponent
+        let private castlingMoves (board: Board) (location: int): Move list =
             let kingSide, queenSide = (Board.getPlayer board).Castling
 
             let castleKingSide = 
                 kingSide 
-                && 1uL <<< location + 1 &&& allPieces = 0uL 
-                && 1uL <<< location + 2 &&& allPieces = 0uL
+                && board.Board.[location + 1] = 0uy 
+                && board.Board.[location + 2] = 0uy
             let castleQueenSide = 
                 queenSide 
-                && 1uL <<< location - 1 &&& allPieces = 0uL 
-                && 1uL <<< location - 2 &&& allPieces = 0uL 
-                && 1uL <<< location - 3 &&& allPieces = 0uL
+                && board.Board.[location - 1] = 0uy
+                && board.Board.[location - 2] = 0uy
+                && board.Board.[location - 3] = 0uy
 
             []
             |> fun list -> if not castleKingSide 
                                         then list 
                                         else {
-                                            Piece = Piece.King;
+                                            Piece = board.Board.[location];
                                             Source = location; Target = location + 2;
                                             Flags = Castle KingSide} :: list
             |> fun list -> if not castleQueenSide 
                                         then list 
                                         else {
-                                            Piece = Piece.King;
+                                            Piece = board.Board.[location];
                                             Source = location; Target = location - 2;
                                             Flags = Castle QueenSide} :: list
 
@@ -111,17 +99,17 @@ namespace SpellChess.Chess
             match move.Flags with
             | Normal -> 
                 [
-                    {move with Flags = Promotion Piece.Queen}
-                    {move with Flags = Promotion Piece.Rook}
-                    {move with Flags = Promotion Piece.Bishop}
-                    {move with Flags = Promotion Piece.Knight}
+                    {move with Flags = Promotion (Piece.promote move.Piece PieceType.Queen)}
+                    {move with Flags = Promotion (Piece.promote move.Piece PieceType.Rook)}
+                    {move with Flags = Promotion (Piece.promote move.Piece PieceType.Bishop)}
+                    {move with Flags = Promotion (Piece.promote move.Piece PieceType.Knight)}
                 ]
             | Capture target -> 
                 [
-                    {move with Flags = CapturePromotion (target, Piece.Queen)}
-                    {move with Flags = CapturePromotion (target, Piece.Rook)}
-                    {move with Flags = CapturePromotion (target, Piece.Bishop)}
-                    {move with Flags = CapturePromotion (target, Piece.Knight)}
+                    {move with Flags = CapturePromotion (target, Piece.promote move.Piece PieceType.Queen)}
+                    {move with Flags = CapturePromotion (target, Piece.promote move.Piece PieceType.Rook)}
+                    {move with Flags = CapturePromotion (target, Piece.promote move.Piece PieceType.Bishop)}
+                    {move with Flags = CapturePromotion (target, Piece.promote move.Piece PieceType.Knight)}
                 ]
             | _ -> [move]
 
@@ -133,91 +121,97 @@ namespace SpellChess.Chess
 
         let private checkThenGeneratePromotions (board: Board) (location: int) (moves: Move list) =
             let promotionRank = 
-                match board.Player with
-                | Side.White -> 6
-                | Side.Black -> 1
+                match board.ActiveColor with
+                | Color.White -> 6
+                | Color.Black -> 1
                 | _ -> -1
             
             if location >>> 3 <> promotionRank then moves
             else 
             generatePromotions [] moves
 
-        let private pawnMoves (board: Board) (location: int) = 
-            let friendly, opponent = generateSideInts board
-            
-            let side = match board.Player with
-                            | Side.White -> 1
-                            | Side.Black -> -1
-                            | _ -> 0
+        let private pawnMoves (board: Board) (location: int) =  
+            let pawn = board.Board.[location]
+            let enemyColor = Color.oppositeColor board.ActiveColor
+
+            let direction, doubleRank, enPassantRank = 
+                match board.ActiveColor with
+                | Color.White -> 1, 1, 5
+                | Color.Black -> -1, 1, 4
+                | _ -> 0, -1, -1
+
 
             let rank = location >>> 3
             let file = location &&& 7
 
-            let forward = location + side*8
+            let forward = location + direction*8
             let leftAttack = forward - 1
             let rightAttack = forward + 1
-            let forward2 = forward + side*8
+            let forward2 = forward + direction*8
 
-            let canMoveForward = 1uL <<< forward &&& (friendly ||| opponent) = 0uL
+            let canMoveForward = board.Board.[forward] = 0uy
 
             let canAttackLeft = 
                 file > 0 
-                && 1uL <<< leftAttack &&& opponent <> 0uL
+                && Piece.color board.Board.[leftAttack] = enemyColor
 
             let canEnPassantLeft =
                 file > 0 
+                && rank = enPassantRank
                 && Some leftAttack = board.EnPassant
             
             let canAttackRight = 
                 file < 7
-                && 1uL <<< rightAttack &&& opponent <> 0uL
+                && Piece.color board.Board.[rightAttack] = enemyColor
 
             let canEnPassantRight =
                 file < 7 
                 && Some rightAttack = board.EnPassant
             
             let canMove2 = 
-                (if board.Player = Side.White then 1 else 6) = rank 
-                && canMoveForward 
-                && 1uL <<< forward2 &&& (friendly ||| opponent) = 0uL
+                doubleRank = rank 
+                && canMoveForward
+                && board.Board.[forward2] = 0uy
 
             [canMoveForward, forward; canAttackLeft, leftAttack; canAttackRight, rightAttack; canMove2, forward2]
             |> List.filter (fun (canMove, _) -> canMove)
             |> List.map (fun (_, location) -> location)
-            |> generateNormalsAndCaptures board location Piece.Pawn
+            |> generateNormalsAndCaptures board location pawn
             |> checkThenGeneratePromotions board location
             |> fun list -> if not canEnPassantLeft 
                                         then list 
                                         else {
-                                            Piece = Piece.Pawn;
+                                            Piece = pawn;
                                             Source = location; Target = leftAttack;
                                             Flags = EnPassant} :: list
             |> fun list -> if not canEnPassantRight 
                                         then list 
                                         else {
-                                            Piece = Piece.Pawn;
+                                            Piece = pawn;
                                             Source = location; Target = rightAttack;
                                             Flags = EnPassant} :: list
 
         let private safeSquare (board: Board) (location: int) =
-            let fKing, fQueen, fRook, fBishop, fKnight, fPawn = (Board.getOpponent board).Pieces
-            let oKing, oQueen, oRook, oBishop, oKnight, oPawn = (Board.getPlayer board).Pieces
-            
-            let allPieces = 
-                fKing ||| fQueen ||| fRook ||| fBishop ||| fKnight ||| fPawn ||| oKing ||| oQueen ||| oRook ||| oBishop ||| oKnight ||| oPawn
+            let opponentColor = Color.oppositeColor board.ActiveColor
+            let oPawn = Piece.generate opponentColor PieceType.Pawn
+            let oKnight = Piece.generate opponentColor PieceType.Knight
+            let oBishop = Piece.generate opponentColor PieceType.Bishop
+            let oRook = Piece.generate opponentColor PieceType.Rook
+            let oQueen = Piece.generate opponentColor PieceType.Queen
+            let oKing = Piece.generate opponentColor PieceType.King
 
-            match board.Player with
-            | Side.White -> 1
-            | Side.Black -> -1
+            match board.ActiveColor with
+            | Color.White -> 1
+            | Color.Black -> -1
             | _ -> 0
             |> fun direction -> 
-                1uL <<< location + 7*direction &&& oPawn <> 0uL 
-                || 1uL <<< location + 9*direction &&& oPawn <> 0uL
-            |> (||) (List.exists (findCapture allPieces oKnight location 1) knightDirections)
-            |> (||) (List.exists (findCapture allPieces oBishop location 8) bishopDirections)
-            |> (||) (List.exists (findCapture allPieces oRook   location 8) rookDirections)
-            |> (||) (List.exists (findCapture allPieces oQueen  location 8) queenDirections)
-            |> (||) (List.exists (findCapture allPieces oKing   location 1) queenDirections)
+                board.Board.[location + 7*direction] = oPawn 
+                || board.Board.[location + 9*direction] = oPawn
+            |> (||) (List.exists (findCapture board oKnight location 1) knightDirections)
+            |> (||) (List.exists (findCapture board oBishop location 8) bishopDirections)
+            |> (||) (List.exists (findCapture board oRook   location 8) rookDirections)
+            |> (||) (List.exists (findCapture board oQueen  location 8) queenDirections)
+            |> (||) (List.exists (findCapture board oKing   location 1) queenDirections)
             |> not
 
         let private noCheck (board: Board) =
@@ -227,53 +221,52 @@ namespace SpellChess.Chess
                 let testSquares  = 
                     match move.Flags with
                     | Castle KingSide | Castle QueenSide -> [move.Source..move.Target]
-                    | _ -> [BitBoard.getLSB (PieceBoards.getBitBoard Piece.King (Board.getOpponent nextBoard).Pieces)]
+                    | _ -> [(Board.getPlayer board).KingLocation]
 
                 testSquares
                 |> List.forall (safeSquare nextBoard) 
             |> List.filter
         
-        let validMoves (board: Board) (intLoc: int) (piece: Piece) =
-            match piece with
-            | Piece.Queen | Piece.Rook | Piece.Bishop | Piece.Knight -> linearMoves board intLoc piece
-            | Piece.King -> List.append (linearMoves board intLoc piece) (castlingMoves board intLoc)
+        let validMoves (board: Board) (intLoc: int) =
+            let piece = board.Board.[intLoc]
+            match Piece.pieceType piece with
+            | PieceType.Queen | PieceType.Rook | PieceType.Bishop | PieceType.Knight -> linearMoves board intLoc piece
+            | PieceType.King -> 
+                List.append 
+                    (linearMoves board intLoc piece) 
+                    (castlingMoves board intLoc)
             // | Piece.Knight -> otherMoves board intLoc piece
-            | Piece.Pawn -> pawnMoves board intLoc
+            | PieceType.Pawn -> pawnMoves board intLoc
             | _ -> []
             |> noCheck board
 
         let allValidMoves (board: Board) =
-            let king, queen, rook, bishop, knight, pawn = (Board.getPlayer board).Pieces
-
             fun (index: int) ->
-                match 1uL <<< index with
-                | x when x &&& king <> 0uL -> Piece.King, index
-                | x when x &&& queen <> 0uL -> Piece.Queen, index
-                | x when x &&& rook <> 0uL -> Piece.Rook, index
-                | x when x &&& bishop <> 0uL -> Piece.Bishop, index
-                | x when x &&& knight <> 0uL -> Piece.Knight, index
-                | x when x &&& pawn <> 0uL -> Piece.Pawn, index
-                | _ -> Piece.Pawn, -1
+                if Piece.color board.Board.[index] = board.ActiveColor then index else -1
             |> List.init 64
-            |> List.filter (fun (_, i) -> i >= 0)
-            |> List.fold (fun list (piece, loc) -> List.append list (validMoves board loc piece)) []
+            |> List.filter (fun i -> i >= 0)
+            |> List.fold (fun list loc -> List.append list (validMoves board loc)) []
 
     module Evaluate = 
         let private pieceValue piece =
             match piece with
-            | Piece.Queen -> 9
-            | Piece.Rook -> 5
-            | Piece.Bishop -> 3
-            | Piece.Knight -> 3
-            | Piece.Pawn -> 1
+            | PieceType.Queen -> 9
+            | PieceType.Rook -> 5
+            | PieceType.Bishop -> 3
+            | PieceType.Knight -> 3
+            | PieceType.Pawn -> 1
             | _ -> 0
 
-        let private boardValue (king, queen, rook, bishop, knight, pawn) =
-            int (BitBoard.pieceCount queen) * pieceValue Piece.Queen
-            |> (+) (int (BitBoard.pieceCount rook) * pieceValue Piece.Rook)
-            |> (+) (int (BitBoard.pieceCount bishop) * pieceValue Piece.Bishop)
-            |> (+) (int (BitBoard.pieceCount knight) * pieceValue Piece.Knight)
-            |> (+) (int (BitBoard.pieceCount pawn) * pieceValue Piece.Pawn)
+        let private boardValue =
+            (fun (white, black) piece -> 
+                let value = pieceValue (Piece.pieceType piece)
+                match Piece.color piece with
+                | Color.White -> white + value, black
+                | Color.Black -> white, black + value
+                | _ -> white, black
+            )
+            |> Array.fold <| (0, 0)
+
 
         let determineMate board = 
             Generate.allValidMoves board
@@ -283,4 +276,9 @@ namespace SpellChess.Chess
         let evaluate (board: Board) =
             if determineMate board then -10000000
             else 
-            boardValue (Board.getPlayer board).Pieces - boardValue (Board.getOpponent board).Pieces
+            let white, black = boardValue board.Board
+
+            match board.ActiveColor with
+            | Color.White -> white - black
+            | Color.Black -> black - white
+            | _ -> -3000
