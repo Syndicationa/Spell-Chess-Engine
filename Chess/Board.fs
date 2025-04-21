@@ -62,57 +62,57 @@ module Piece =
 
             | _ -> "  "
 
-// type BitBoard = uint64
-// module BitBoard =
-//     let getLSB (bitBoard: BitBoard) =
-//         bitBoard &&& ~~~bitBoard + 1UL // isolates the LSB
-//         |> System.Numerics.BitOperations.TrailingZeroCount
+type BitBoard = uint64
+module BitBoard =
+    let getLSB (bitBoard: BitBoard) =
+        bitBoard &&& ~~~bitBoard + 1UL // isolates the LSB
+        |> System.Numerics.BitOperations.TrailingZeroCount
 
-//     let private sumOfANDandShiftedAND andNum shiftCount n  = 
-//         (n &&& andNum) + (n >>> shiftCount &&& andNum)
+    let private sumOfANDandShiftedAND andNum shiftCount n  = 
+        (n &&& andNum) + (n >>> shiftCount &&& andNum)
 
-//     let pieceCount = 
-//         sumOfANDandShiftedAND 0x5555555555555555uL 1
-//         >> sumOfANDandShiftedAND 0x3333333333333333uL 2
-//         >> sumOfANDandShiftedAND 0x0F0F0F0F0F0F0F0FuL 4
-//         >> sumOfANDandShiftedAND 0x00FF00FF00FF00FFuL 8
-//         >> sumOfANDandShiftedAND 0x0000FFFF0000FFFFuL 16
-//         >> sumOfANDandShiftedAND 0x00000000FFFFFFFFuL 32
+    let pieceCount = 
+        sumOfANDandShiftedAND 0x5555555555555555uL 1
+        >> sumOfANDandShiftedAND 0x3333333333333333uL 2
+        >> sumOfANDandShiftedAND 0x0F0F0F0F0F0F0F0FuL 4
+        >> sumOfANDandShiftedAND 0x00FF00FF00FF00FFuL 8
+        >> sumOfANDandShiftedAND 0x0000FFFF0000FFFFuL 16
+        >> sumOfANDandShiftedAND 0x00000000FFFFFFFFuL 32
 
-// type PieceBoards = BitBoard * BitBoard * BitBoard * BitBoard * BitBoard * BitBoard
-// module PieceBoards =
-//     let getBitBoard pieceType (pieces: PieceBoards) =
-//         let king, queen, rook, bishop, knight, pawn = pieces
-//         match pieceType with 
-//         | Piece.King -> king
-//         | Piece.Queen -> queen
-//         | Piece.Rook -> rook
-//         | Piece.Bishop -> bishop
-//         | Piece.Knight -> knight
-//         | Piece.Pawn -> pawn
-//         | _ -> 0uL
+type PieceBoards = BitBoard * BitBoard * BitBoard * BitBoard * BitBoard * BitBoard
+module PieceBoards =
+    let getBitBoard pieceType (pieces: PieceBoards) =
+        let king, queen, rook, bishop, knight, pawn = pieces
+        match pieceType with 
+        | PieceType.King -> king
+        | PieceType.Queen -> queen
+        | PieceType.Rook -> rook
+        | PieceType.Bishop -> bishop
+        | PieceType.Knight -> knight
+        | PieceType.Pawn -> pawn
+        | _ -> 0uL
 
-//     let setBitBoard piece pieces bitBoard =
-//         let king, queen, rook, bishop, knight, pawn = pieces
-//         match piece with 
-//         | Piece.King -> bitBoard, queen, rook, bishop, knight, pawn
-//         | Piece.Queen -> king, bitBoard, rook, bishop, knight, pawn
-//         | Piece.Rook -> king, queen, bitBoard, bishop, knight, pawn
-//         | Piece.Bishop -> king, queen, rook, bitBoard, knight, pawn
-//         | Piece.Knight -> king, queen, rook, bishop, bitBoard, pawn
-//         | Piece.Pawn -> king, queen, rook, bishop, knight, bitBoard
-//         | _ -> pieces
+    let setBitBoard piece pieces bitBoard =
+        let king, queen, rook, bishop, knight, pawn = pieces
+        match piece with 
+        | PieceType.King -> bitBoard, queen, rook, bishop, knight, pawn
+        | PieceType.Queen -> king, bitBoard, rook, bishop, knight, pawn
+        | PieceType.Rook -> king, queen, bitBoard, bishop, knight, pawn
+        | PieceType.Bishop -> king, queen, rook, bitBoard, knight, pawn
+        | PieceType.Knight -> king, queen, rook, bishop, bitBoard, pawn
+        | PieceType.Pawn -> king, queen, rook, bishop, knight, bitBoard
+        | _ -> pieces
 
-//     let getPieceAtLocation (pieces: PieceBoards) (location: int) =
-//         let king, queen, rook, bishop, knight, pawn = pieces
-//         match 1uL <<< location with
-//         | x when king &&& x <> 0uL -> Some Piece.King
-//         | x when queen &&& x <> 0uL -> Some Piece.Queen
-//         | x when rook &&& x <> 0uL -> Some Piece.Rook
-//         | x when bishop &&& x <> 0uL -> Some Piece.Bishop
-//         | x when knight &&& x <> 0uL -> Some Piece.Knight
-//         | x when pawn &&& x <> 0uL -> Some Piece.Pawn
-//         | x -> None
+    let getPieceAtLocation (pieces: PieceBoards) (location: int) =
+        let king, queen, rook, bishop, knight, pawn = pieces
+        match 1uL <<< location with
+        | x when king &&& x <> 0uL -> Some PieceType.King
+        | x when queen &&& x <> 0uL -> Some PieceType.Queen
+        | x when rook &&& x <> 0uL -> Some PieceType.Rook
+        | x when bishop &&& x <> 0uL -> Some PieceType.Bishop
+        | x when knight &&& x <> 0uL -> Some PieceType.Knight
+        | x when pawn &&& x <> 0uL -> Some PieceType.Pawn
+        | x -> None
 
 type Player = {
     KingLocation: int

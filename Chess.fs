@@ -64,34 +64,28 @@ namespace SpellChess.Chess
             }
 
         module private Encode =
-            let inline position board index white black =
+            let position board index white black =
                 let wKing, wQueen, wRook, wBishop, wKnight, wPawn = white
                 let bKing, bQueen, bRook, bBishop, bKnight, bPawn = black
 
-                let whitePiece = 
-                    match PieceBoards.getPieceAtLocation board.White.Pieces index with
-                    | Some Piece.King -> wKing
-                    | Some Piece.Queen -> wQueen
-                    | Some Piece.Rook -> wRook
-                    | Some Piece.Bishop -> wBishop
-                    | Some Piece.Knight -> wKnight
-                    | Some Piece.Pawn -> wPawn
-                    | Some _ -> 0uL
-                    | None -> 0uL
+                let color = Piece.color board.Board.[index]
+                let pieceType = Piece.pieceType board.Board.[index]
 
-                let blackPiece = 
-                    match PieceBoards.getPieceAtLocation board.Black.Pieces index with
-                    | Some Piece.King -> bKing
-                    | Some Piece.Queen -> bQueen
-                    | Some Piece.Rook -> bRook
-                    | Some Piece.Bishop -> bBishop
-                    | Some Piece.Knight -> bKnight
-                    | Some Piece.Pawn -> bPawn
-                    | Some _ -> 0uL
-                    | None -> 0uL
+                match color, pieceType with
+                | Color.White, PieceType.King -> wKing
+                | Color.Black, PieceType.King -> bKing
+                | Color.White, PieceType.Queen -> wQueen
+                | Color.Black, PieceType.Queen -> bQueen
+                | Color.White, PieceType.Rook -> wRook
+                | Color.Black, PieceType.Rook -> bRook
+                | Color.White, PieceType.Bishop -> wBishop
+                | Color.Black, PieceType.Bishop -> bBishop
+                | Color.White, PieceType.Knight -> wKnight
+                | Color.Black, PieceType.Knight -> bKnight
+                | Color.White, PieceType.Pawn -> wPawn
+                | Color.Black, PieceType.Pawn -> bPawn
+                | _, _ -> 0uL
 
-                whitePiece ^^^ blackPiece
-            
             let inline castling generator board =
                 let wKingSide, wQueenSide = board.White.Castling
                 let bKingSide, bQueenSide = board.Black.Castling
@@ -106,22 +100,22 @@ namespace SpellChess.Chess
         let encodeBoard (generator: Generator) (board: Board): uint64 =
             List.mapi2 (Encode.position board) generator.WhitePositions generator.BlackPositions
             |> List.fold (fun accumulator item -> accumulator ^^^ item) 0uL
-            |> (^^^) (if board.Player = Side.Black then generator.Black else 0uL)
+            |> (^^^) (if board.ActiveColor = Color.Black then generator.Black else 0uL)
             |> (^^^) (Encode.castling generator board)
             |> (^^^) (match board.EnPassant with | Some i -> Array.get generator.EnPassantFile (i &&& 7) | None -> 0uL)
 
         let encodeMove generator hash oldBoard newBoard move =
             let oldPosition = 
-                match oldBoard.Player with
-                | Side.White -> generator.WhitePositions
+                match oldBoard.ActiveColor with
+                | Color.White -> generator.WhitePositions
                 | _ -> generator.BlackPositions
                 |> fun x -> x.[move.Source]
                 |> Hexuple.toArray
                 |> Array.get <| int move.Piece
 
             let newPosition =
-                match oldBoard.Player with
-                | Side.White -> generator.WhitePositions
+                match oldBoard.ActiveColor with
+                | Color.White -> generator.WhitePositions
                 | _ -> generator.BlackPositions
                 |> fun x -> x.[move.Target]
                 |> Hexuple.toArray
@@ -134,18 +128,18 @@ namespace SpellChess.Chess
                 match move.Flags with
                 | Normal | Promotion _ | Castle _ -> 0uL
                 | Capture enemyType  | CapturePromotion (enemyType, _) -> 
-                    match newBoard.Player with
-                    | Side.White -> generator.WhitePositions
+                    match newBoard.ActiveColor with
+                    | Color.White -> generator.WhitePositions
                     | _ -> generator.BlackPositions
                     |> fun x -> x.[move.Target]
                     |> Hexuple.toArray
                     |> Array.get <| int enemyType
                 | EnPassant -> 
-                    match newBoard.Player with
-                    | Side.White -> generator.WhitePositions.[(move.Source &&& ~~~7) + (move.Target &&& 7)]
+                    match newBoard.ActiveColor with
+                    | Color.White -> generator.WhitePositions.[(move.Source &&& ~~~7) + (move.Target &&& 7)]
                     | _ -> generator.BlackPositions.[(move.Source &&& ~~~7) + (move.Target &&& 7)]
                     |> Hexuple.toArray
-                    |> Array.get <| int Piece.Pawn
+                    |> Array.get <| int PieceType.Pawn
             
             let oldCastle = Encode.castling generator oldBoard
             let newCastle = Encode.castling generator newBoard
