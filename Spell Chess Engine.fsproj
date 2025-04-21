@@ -6,7 +6,11 @@
     <RootNamespace>Spell_Chess_Engine</RootNamespace>
   </PropertyGroup>
 
-  <ItemGroup><Compile Include="Chess.fs" /><Compile Include="Display.fs" />
+  <ItemGroup>
+    <Compile Include="Chess\Board.fs" />
+    <Compile Include="Chess\Move.fs" />
+    <Compile Include="Chess.fs" />
+    <Compile Include="Display.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

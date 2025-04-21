@@ -33,6 +33,9 @@ module Program =
         
         let board = Chess.Board.create "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
         
+        Chess.Search.countValidMoves board 3
+        |> printfn "Valid Moves at Depth 3 is %i"
+
         // board
         // |> Chess.Board.toString
         // |> printfn "%s"
@@ -46,101 +49,107 @@ module Program =
         //     |> Option.defaultValue "None"
         //     |> printfn "Move: %s"
 
-        let moveRegex =  Regex "([KkQqRrBbNn]?)(x?)([a-h][1-8])([a-h][1-8])(?:=([QRBN]))?"
+        // let moveRegex =  Regex "([KkQqRrBbNn]?)(x?)([a-h][1-8])([a-h][1-8])(?:=([QRBN]))?"
 
-        let piece (str: string) =
-            match str with
-            | "K" | "k" -> Chess.Piece.King
-            | "Q" | "q" -> Chess.Piece.Queen
-            | "R" | "r" -> Chess.Piece.Rook
-            | "B" | "b" -> Chess.Piece.Bishop
-            | "N" | "n" -> Chess.Piece.Knight
-            | "" -> Chess.Piece.Pawn
-            | _ -> Chess.Piece.Pawn
+        // let piece (str: string) =
+        //     match str with
+        //     | "K" | "k" -> Chess.Piece.King
+        //     | "Q" | "q" -> Chess.Piece.Queen
+        //     | "R" | "r" -> Chess.Piece.Rook
+        //     | "B" | "b" -> Chess.Piece.Bishop
+        //     | "N" | "n" -> Chess.Piece.Knight
+        //     | "" -> Chess.Piece.Pawn
+        //     | _ -> Chess.Piece.Pawn
 
-        let kingSideCastle (human: Chess.Side): Chess.Move = 
-            let king = match human with
-                        | Chess.Side.White -> "e1"
-                        | Chess.Side.Black -> "e8"
-                        | _ -> "a1"
-                        |> Chess.Location.fromString
-                        |> Option.map Chess.Location.toInt
-                        |> Option.defaultValue -1
-            {
-                Piece = Chess.Piece.King
-                Source = king
-                Target = king + 2
-                Flags = Chess.MoveType.Castle Chess.CastleDirection.KingSide
-            }
+        // let kingSideCastle (human: Chess.Side): Chess.Move = 
+        //     let king = match human with
+        //                 | Chess.Side.White -> "e1"
+        //                 | Chess.Side.Black -> "e8"
+        //                 | _ -> "a1"
+        //                 |> Chess.Location.fromString
+        //                 |> Option.map Chess.Location.toInt
+        //                 |> Option.defaultValue -1
+        //     {
+        //         Piece = Chess.Piece.King
+        //         Source = king
+        //         Target = king + 2
+        //         Flags = Chess.MoveType.Castle Chess.CastleDirection.KingSide
+        //     }
         
-        let queenSideCastle (human: Chess.Side): Chess.Move = 
-            let king = match human with
-                        | Chess.Side.White -> "e1"
-                        | Chess.Side.Black -> "e8"
-                        | _ -> "a1"
-                        |> Chess.Location.fromString
-                        |> Option.map Chess.Location.toInt
-                        |> Option.defaultValue -1
-            {
-                Piece = Chess.Piece.King
-                Source = king
-                Target = king - 2
-                Flags = Chess.MoveType.Castle Chess.CastleDirection.QueenSide
-            }
+        // let queenSideCastle (human: Chess.Side): Chess.Move = 
+        //     let king = match human with
+        //                 | Chess.Side.White -> "e1"
+        //                 | Chess.Side.Black -> "e8"
+        //                 | _ -> "a1"
+        //                 |> Chess.Location.fromString
+        //                 |> Option.map Chess.Location.toInt
+        //                 |> Option.defaultValue -1
+        //     {
+        //         Piece = Chess.Piece.King
+        //         Source = king
+        //         Target = king - 2
+        //         Flags = Chess.MoveType.Castle Chess.CastleDirection.QueenSide
+        //     }
 
-        let secTup f (a, b) =
-            a, f b
+        // let secTup f (a, b) =
+        //     a, f b
 
-        let readInput human str =
-            if str = "O-O" then Some (kingSideCastle human)
-            elif str = "O-O-O" then Some (queenSideCastle human)
-            else
-            str
-            |> moveRegex.Match
-            |> fun m -> [for g in m.Groups do g.Value]
-            |> fun list -> 
-                match list with
-                | [move; pieceLetter; capture; source; target; promotion] ->
-                    let Source = Chess.Location.fromString source |> Option.map Chess.Location.toInt |> Option.defaultValue -1
-                    let Target = Chess.Location.fromString target |> Option.map Chess.Location.toInt |> Option.defaultValue -1
+        // let readInput human str =
+        //     if str = "O-O" then Some (kingSideCastle human)
+        //     elif str = "O-O-O" then Some (queenSideCastle human)
+        //     else
+        //     str
+        //     |> moveRegex.Match
+        //     |> fun m -> [for g in m.Groups do g.Value]
+        //     |> fun list -> 
+        //         match list with
+        //         | [move; pieceLetter; capture; source; target; promotion] ->
+        //             let Source = Chess.Location.fromString source |> Option.map Chess.Location.toInt |> Option.defaultValue -1
+        //             let Target = Chess.Location.fromString target |> Option.map Chess.Location.toInt |> Option.defaultValue -1
                     
-                    let move: Chess.Move = {
-                        Piece = piece pieceLetter
-                        Source = Source
-                        Target = Target
-                        Flags = match capture, promotion with
-                                | "", "" -> Chess.MoveType.Normal
-                                | "e", "" -> Chess.MoveType.EnPassant
-                                | "x", "" -> Chess.MoveType.Capture (Chess.PieceBoards.getPieceAtLocation (Chess.Board.getOpponent board).Pieces Target |> Option.defaultValue Chess.Piece.Pawn)
-                                | "", promote -> Chess.MoveType.Promotion (piece promote)
-                                | "x", promote -> Chess.MoveType.CapturePromotion (Chess.PieceBoards.getPieceAtLocation (Chess.Board.getOpponent board).Pieces Target |> Option.defaultValue Chess.Piece.Pawn, piece promote)
-                                | _ -> Chess.MoveType.Normal
-                    }
-                    Some move
-                | _ -> None
+        //             let move: Chess.Move = {
+        //                 Piece = piece pieceLetter
+        //                 Source = Source
+        //                 Target = Target
+        //                 Flags = match capture, promotion with
+        //                         | "", "" -> Chess.MoveType.Normal
+        //                         | "e", "" -> Chess.MoveType.EnPassant
+        //                         | "x", "" -> Chess.MoveType.Capture (Chess.PieceBoards.getPieceAtLocation (Chess.Board.getOpponent board).Pieces Target |> Option.defaultValue Chess.Piece.Pawn)
+        //                         | "", promote -> Chess.MoveType.Promotion (piece promote)
+        //                         | "x", promote -> Chess.MoveType.CapturePromotion (Chess.PieceBoards.getPieceAtLocation (Chess.Board.getOpponent board).Pieces Target |> Option.defaultValue Chess.Piece.Pawn, piece promote)
+        //                         | _ -> Chess.MoveType.Normal
+        //             }
+        //             Some move
+        //         | _ -> None
 
-        let rec temporaryGameLoop human (transposition, board) =
-            if Chess.Evaluate.determineMate board then "Game Over\n" + Chess.Board.toString board else
+        // let rec temporaryGameLoop human (transposition: Chess.Transposition.Table, board) =
+        //     if Chess.Evaluate.determineMate board then "Game Over\n" + Chess.Board.toString board else
 
-            if board.Player = human then
-                Chess.Board.toString board
-                |> printfn "%s"
-                System.Console.ReadLine()
-                |> readInput human
-                |> Option.map (Chess.Move.move board)
-                |> Option.defaultValue board
-                |> fun x -> transposition, x
-                //Do Human Stuff
-            else
-                Chess.Search.findBestMove transposition board 4
-                |> secTup (fun (v, move) -> move)
-                |> secTup (Option.defaultValue {Piece = Chess.Piece.King; Source = -1; Target = -1; Flags = Chess.MoveType.Normal})
-                |> secTup (fun m -> printfn "Black played: %s" (Chess.Move.toString m); m)
-                |> secTup (Chess.Move.move board)
-            |> temporaryGameLoop human
+        //     if board.Player = human then
+        //         Chess.Board.toString board
+        //         |> printfn "%s"
+        //         transposition.Table.Count
+        //         |> printfn "%i" 
 
-        temporaryGameLoop Chess.Side.White (1, board)
-        |> printfn "%s"
+        //         System.Console.ReadLine()
+        //         |> readInput human
+        //         |> Option.map (Chess.Move.move board)
+        //         |> Option.defaultValue board
+        //         |> fun x -> transposition, x
+        //         //Do Human Stuff
+        //     else
+        //         Chess.Search.findBestMove transposition board 4
+        //         |> secTup (secTup (fun move -> 
+        //             move
+        //             |> Option.defaultValue {Piece = Chess.Piece.King; Source = -1; Target = -1; Flags = Chess.MoveType.Normal}))
+        //         |> secTup (fun (score, m) -> printfn "Black played: %s scored at %i" (Chess.Move.toString m) score; m)
+        //         |> secTup (Chess.Move.move board)
+        //     |> temporaryGameLoop human
+
+        // let transpositionTable = Chess.Transposition.createTable 30241uL
+
+        // temporaryGameLoop Chess.Side.White (transpositionTable, board)
+        // |> printfn "%s"
 
         0
         // AppBuilder
