@@ -1,7 +1,7 @@
 namespace SpellChess.Chess
     module Generate =
         let rookDirections = [1, 0; -1, 0; 0, 1; 0, -1]
-        let bishopDirections = [1, 1; -1, 1; -1, 1; 1, -1]
+        let bishopDirections = [1, 1; -1, 1; -1, -1; 1, -1]
         let queenDirections = List.append rookDirections bishopDirections
 
         let knightDirections = [
@@ -137,7 +137,7 @@ namespace SpellChess.Chess
             let direction, doubleRank, enPassantRank = 
                 match board.ActiveColor with
                 | Color.White -> 1, 1, 5
-                | Color.Black -> -1, 1, 4
+                | Color.Black -> -1, 6, 4
                 | _ -> 0, -1, -1
 
 
@@ -156,9 +156,8 @@ namespace SpellChess.Chess
                 && Piece.color board.Board.[leftAttack] = enemyColor
 
             let canEnPassantLeft =
-                file > 0 
-                && rank = enPassantRank
-                && Some leftAttack = board.EnPassant
+                file > 0
+                && Some (location - 1) = board.EnPassant
             
             let canAttackRight = 
                 file < 7
@@ -166,7 +165,7 @@ namespace SpellChess.Chess
 
             let canEnPassantRight =
                 file < 7 
-                && Some rightAttack = board.EnPassant
+                && Some (location + 1) = board.EnPassant
             
             let canMove2 = 
                 doubleRank = rank 
@@ -191,22 +190,43 @@ namespace SpellChess.Chess
                                             Source = location; Target = rightAttack;
                                             Flags = EnPassant} :: list
 
-        let private safeSquare (board: Board) (location: int) =
-            let opponentColor = Color.oppositeColor board.ActiveColor
-            let oPawn = Piece.generate opponentColor PieceType.Pawn
-            let oKnight = Piece.generate opponentColor PieceType.Knight
-            let oBishop = Piece.generate opponentColor PieceType.Bishop
-            let oRook = Piece.generate opponentColor PieceType.Rook
-            let oQueen = Piece.generate opponentColor PieceType.Queen
-            let oKing = Piece.generate opponentColor PieceType.King
+        let private findPawnCapture board targetPiece location =
+            let direction: int = 
+                match board.ActiveColor with
+                | Color.White -> -1
+                | Color.Black -> 1
+                | _ -> 0
 
-            match board.ActiveColor with
-            | Color.White -> 1
-            | Color.Black -> -1
-            | _ -> 0
-            |> fun direction -> 
-                board.Board.[location + 7*direction] = oPawn 
-                || board.Board.[location + 9*direction] = oPawn
+            let file = location &&& 7
+
+            let forward = location + direction*8
+            let leftAttack = forward - 1
+            let rightAttack = forward + 1
+
+            let canAttackLeft = 
+                file > 0 
+                && leftAttack >= 0
+                && leftAttack < 64
+                && board.Board.[leftAttack] = targetPiece
+            
+            let canAttackRight = 
+                file < 7
+                && rightAttack >= 0
+                && rightAttack < 64
+                && board.Board.[rightAttack] = targetPiece
+
+            canAttackLeft || canAttackRight
+
+        let private safeSquare (board: Board) (location: int) =
+            let oPawn = Piece.generate board.ActiveColor PieceType.Pawn
+            let oKnight = Piece.generate board.ActiveColor PieceType.Knight
+            let oBishop = Piece.generate board.ActiveColor PieceType.Bishop
+            let oRook = Piece.generate board.ActiveColor PieceType.Rook
+            let oQueen = Piece.generate board.ActiveColor PieceType.Queen
+            let oKing = Piece.generate board.ActiveColor PieceType.King
+
+
+            findPawnCapture board oPawn location
             |> (||) (List.exists (findCapture board oKnight location 1) knightDirections)
             |> (||) (List.exists (findCapture board oBishop location 8) bishopDirections)
             |> (||) (List.exists (findCapture board oRook   location 8) rookDirections)
@@ -220,8 +240,9 @@ namespace SpellChess.Chess
 
                 let testSquares  = 
                     match move.Flags with
-                    | Castle KingSide | Castle QueenSide -> [move.Source..move.Target]
-                    | _ -> [(Board.getPlayer board).KingLocation]
+                    | Castle KingSide -> [move.Source..move.Target]
+                    | Castle QueenSide -> [move.Target..move.Source]
+                    | _ -> [(Board.getOpponent nextBoard).KingLocation]
 
                 testSquares
                 |> List.forall (safeSquare nextBoard) 

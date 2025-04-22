@@ -32,124 +32,95 @@ module Program =
         System.Console.OutputEncoding <- System.Text.Encoding.UTF8
         
         let board = Chess.Board.create "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+
+        let moveRegex =  Regex "([a-h][1-8])([a-h][1-8])(?:=([QRBN]))?"
+
+        let piece (str: string) =
+            match str with
+            | "K" | "k" -> Chess.PieceType.King
+            | "Q" | "q" -> Chess.PieceType.Queen
+            | "R" | "r" -> Chess.PieceType.Rook
+            | "B" | "b" -> Chess.PieceType.Bishop
+            | "N" | "n" -> Chess.PieceType.Knight
+            | "" -> Chess.PieceType.Pawn
+            | _ -> Chess.PieceType.Pawn
+
+        let kingSideCastle (human: Chess.Color): Chess.Move = 
+            let king = match human with
+                        | Chess.Color.White -> "e1"
+                        | Chess.Color.Black -> "e8"
+                        | _ -> "a1"
+                        |> Chess.Location.fromString
+                        |> Option.map Chess.Location.toInt
+                        |> Option.defaultValue -1
+            {
+                Piece = Chess.Piece.generate human Chess.PieceType.King
+                Source = king
+                Target = king + 2
+                Flags = Chess.MoveType.Castle Chess.CastleDirection.KingSide
+            }
         
-        Chess.Search.countValidMoves board 3
-        |> printfn "Valid Moves at Depth 3 is %i"
+        let queenSideCastle (human: Chess.Color): Chess.Move = 
+            let king = match human with
+                        | Chess.Color.White -> "e1"
+                        | Chess.Color.Black -> "e8"
+                        | _ -> "a1"
+                        |> Chess.Location.fromString
+                        |> Option.map Chess.Location.toInt
+                        |> Option.defaultValue -1
+            {
+                Piece = Chess.Piece.generate human Chess.PieceType.King
+                Source = king
+                Target = king - 2
+                Flags = Chess.MoveType.Castle Chess.CastleDirection.QueenSide
+            }
 
-        // board
-        // |> Chess.Board.toString
-        // |> printfn "%s"
-        
-        // Chess.Search.findBestMove board 10
-        // |> fun (v, move) -> 
-        //     printfn "Score: %i" v
-            
-        //     move
-        //     |> Option.map Chess.Move.toString 
-        //     |> Option.defaultValue "None"
-        //     |> printfn "Move: %s"
+        let secTup f (a, b) =
+            a, f b
 
-        // let moveRegex =  Regex "([KkQqRrBbNn]?)(x?)([a-h][1-8])([a-h][1-8])(?:=([QRBN]))?"
+        let readInput human board str =
+            if str = "O-O" then Some (kingSideCastle human)
+            elif str = "O-O-O" then Some (queenSideCastle human)
+            else
+            str
+            |> moveRegex.Match
+            |> fun m -> [for g in m.Groups do g.Value]
+            |> fun list -> 
+                match list with
+                | [move; source; target; promotion] ->
+                    let promotionType = 
+                        match piece promotion with
+                        | Chess.PieceType.Pawn -> None
+                        | value -> Some value
+                    Some (Chess.Move.fromString source target promotionType board)
+                | _ -> None
 
-        // let piece (str: string) =
-        //     match str with
-        //     | "K" | "k" -> Chess.Piece.King
-        //     | "Q" | "q" -> Chess.Piece.Queen
-        //     | "R" | "r" -> Chess.Piece.Rook
-        //     | "B" | "b" -> Chess.Piece.Bishop
-        //     | "N" | "n" -> Chess.Piece.Knight
-        //     | "" -> Chess.Piece.Pawn
-        //     | _ -> Chess.Piece.Pawn
+        let rec temporaryGameLoop human (transposition: Chess.Transposition.Table, board) =
+            if Chess.Evaluate.determineMate board then "Game Over\n" + Chess.Board.toString board else
 
-        // let kingSideCastle (human: Chess.Side): Chess.Move = 
-        //     let king = match human with
-        //                 | Chess.Side.White -> "e1"
-        //                 | Chess.Side.Black -> "e8"
-        //                 | _ -> "a1"
-        //                 |> Chess.Location.fromString
-        //                 |> Option.map Chess.Location.toInt
-        //                 |> Option.defaultValue -1
-        //     {
-        //         Piece = Chess.Piece.King
-        //         Source = king
-        //         Target = king + 2
-        //         Flags = Chess.MoveType.Castle Chess.CastleDirection.KingSide
-        //     }
-        
-        // let queenSideCastle (human: Chess.Side): Chess.Move = 
-        //     let king = match human with
-        //                 | Chess.Side.White -> "e1"
-        //                 | Chess.Side.Black -> "e8"
-        //                 | _ -> "a1"
-        //                 |> Chess.Location.fromString
-        //                 |> Option.map Chess.Location.toInt
-        //                 |> Option.defaultValue -1
-        //     {
-        //         Piece = Chess.Piece.King
-        //         Source = king
-        //         Target = king - 2
-        //         Flags = Chess.MoveType.Castle Chess.CastleDirection.QueenSide
-        //     }
+            if board.ActiveColor = human then
+                Chess.Board.toString board
+                |> printfn "%s"
 
-        // let secTup f (a, b) =
-        //     a, f b
+                System.Console.ReadLine()
+                |> readInput human board
+                |> Option.map (Chess.Move.move board)
+                |> Option.defaultValue board
+                |> fun x -> transposition, x
+                //Do Human Stuff
+            else
+                Chess.Search.findBestMove transposition board 4
+                |> secTup (secTup (fun move -> 
+                    move
+                    |> Option.defaultValue {Piece = 0uy; Source = -1; Target = -1; Flags = Chess.MoveType.Normal}))
+                |> secTup (fun (score, m) -> printfn "Black played: %s scored at %i" (Chess.Move.toString m) score; m)
+                |> secTup (Chess.Move.move board)
+            |> temporaryGameLoop human
 
-        // let readInput human str =
-        //     if str = "O-O" then Some (kingSideCastle human)
-        //     elif str = "O-O-O" then Some (queenSideCastle human)
-        //     else
-        //     str
-        //     |> moveRegex.Match
-        //     |> fun m -> [for g in m.Groups do g.Value]
-        //     |> fun list -> 
-        //         match list with
-        //         | [move; pieceLetter; capture; source; target; promotion] ->
-        //             let Source = Chess.Location.fromString source |> Option.map Chess.Location.toInt |> Option.defaultValue -1
-        //             let Target = Chess.Location.fromString target |> Option.map Chess.Location.toInt |> Option.defaultValue -1
-                    
-        //             let move: Chess.Move = {
-        //                 Piece = piece pieceLetter
-        //                 Source = Source
-        //                 Target = Target
-        //                 Flags = match capture, promotion with
-        //                         | "", "" -> Chess.MoveType.Normal
-        //                         | "e", "" -> Chess.MoveType.EnPassant
-        //                         | "x", "" -> Chess.MoveType.Capture (Chess.PieceBoards.getPieceAtLocation (Chess.Board.getOpponent board).Pieces Target |> Option.defaultValue Chess.Piece.Pawn)
-        //                         | "", promote -> Chess.MoveType.Promotion (piece promote)
-        //                         | "x", promote -> Chess.MoveType.CapturePromotion (Chess.PieceBoards.getPieceAtLocation (Chess.Board.getOpponent board).Pieces Target |> Option.defaultValue Chess.Piece.Pawn, piece promote)
-        //                         | _ -> Chess.MoveType.Normal
-        //             }
-        //             Some move
-        //         | _ -> None
+        let transpositionTable = Chess.Transposition.createTable 30241uL
 
-        // let rec temporaryGameLoop human (transposition: Chess.Transposition.Table, board) =
-        //     if Chess.Evaluate.determineMate board then "Game Over\n" + Chess.Board.toString board else
-
-        //     if board.Player = human then
-        //         Chess.Board.toString board
-        //         |> printfn "%s"
-        //         transposition.Table.Count
-        //         |> printfn "%i" 
-
-        //         System.Console.ReadLine()
-        //         |> readInput human
-        //         |> Option.map (Chess.Move.move board)
-        //         |> Option.defaultValue board
-        //         |> fun x -> transposition, x
-        //         //Do Human Stuff
-        //     else
-        //         Chess.Search.findBestMove transposition board 4
-        //         |> secTup (secTup (fun move -> 
-        //             move
-        //             |> Option.defaultValue {Piece = Chess.Piece.King; Source = -1; Target = -1; Flags = Chess.MoveType.Normal}))
-        //         |> secTup (fun (score, m) -> printfn "Black played: %s scored at %i" (Chess.Move.toString m) score; m)
-        //         |> secTup (Chess.Move.move board)
-        //     |> temporaryGameLoop human
-
-        // let transpositionTable = Chess.Transposition.createTable 30241uL
-
-        // temporaryGameLoop Chess.Side.White (transpositionTable, board)
-        // |> printfn "%s"
+        temporaryGameLoop Chess.Color.Black (transpositionTable, board)
+        |> printfn "%s"
 
         0
         // AppBuilder

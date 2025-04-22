@@ -53,7 +53,7 @@ namespace SpellChess.Chess
                 (fun x -> 
                     seed <- Random.generate seed
                     seed
-                ) |> Array.init 4
+                ) |> Array.init 8
             
             {
                 WhitePositions = WhitePositions
@@ -111,7 +111,7 @@ namespace SpellChess.Chess
                 | _ -> generator.BlackPositions
                 |> fun x -> x.[move.Source]
                 |> Hexuple.toArray
-                |> Array.get <| int move.Piece
+                |> Array.get <| int (Piece.pieceType move.Piece)
 
             let newPosition =
                 match oldBoard.ActiveColor with
@@ -121,19 +121,19 @@ namespace SpellChess.Chess
                 |> Hexuple.toArray
                 |> fun x ->
                     match move.Flags with
-                    | Promotion target | CapturePromotion (_, target) -> Array.get x  (int target)
-                    | _ -> Array.get x (int move.Piece)
+                    | Promotion target | CapturePromotion (_, target) -> Array.get x  (int (Piece.pieceType target))
+                    | _ -> Array.get x (int (Piece.pieceType move.Piece))
 
             let capturedPiece = 
                 match move.Flags with
                 | Normal | Promotion _ | Castle _ -> 0uL
-                | Capture enemyType  | CapturePromotion (enemyType, _) -> 
+                | Capture enemyPiece  | CapturePromotion (enemyPiece, _) -> 
                     match newBoard.ActiveColor with
                     | Color.White -> generator.WhitePositions
                     | _ -> generator.BlackPositions
                     |> fun x -> x.[move.Target]
                     |> Hexuple.toArray
-                    |> Array.get <| int enemyType
+                    |> Array.get <| int (Piece.pieceType enemyPiece)
                 | EnPassant -> 
                     match newBoard.ActiveColor with
                     | Color.White -> generator.WhitePositions.[(move.Source &&& ~~~7) + (move.Target &&& 7)]
@@ -147,12 +147,12 @@ namespace SpellChess.Chess
             let oldPassant = 
                 match oldBoard.EnPassant with 
                 | None -> 0uL
-                | Some i -> generator.EnPassantFile.[i]
+                | Some i -> generator.EnPassantFile.[i &&& 7]
 
             let newPassant = 
                 match newBoard.EnPassant with
                 | None -> 0uL
-                | Some i -> generator.EnPassantFile.[i]
+                | Some i -> generator.EnPassantFile.[i &&& 7]
 
             hash
             |> (^^^) oldPosition
@@ -208,11 +208,12 @@ namespace SpellChess.Chess
                 | Some eval -> eval.Depth
                 | None -> -1
             
-            if depth = 0 then Evaluate.evaluate board
-            elif depth < previousDepth then 
+            if depth < previousDepth then 
+                // printfn "Transposition Hit!"
                 previousEval
                 |> Option.map (fun entry -> entry.Score)
                 |> Option.defaultValue System.Int32.MinValue
+            elif depth = 0 then Evaluate.evaluate board
             else
 
             let rec loopThroughAllMoves board alpha beta bestValue moveList =
@@ -226,13 +227,20 @@ namespace SpellChess.Chess
                     let newBest = max score bestValue
                     let newAlpha = max score alpha
 
-                    Transposition.save table {
-                        Encoding = newHash
-                        Depth = depth - 1
-                        Score = score
-                        Type = Transposition.Exact
-                        Age = 100
-                    }
+                    let previousEval = Transposition.tryLookup table newHash;
+                    let previousDepth = 
+                        match previousEval with 
+                        | Some eval -> eval.Depth
+                        | None -> -1
+
+                    if previousDepth < depth - 1 then
+                        Transposition.save table {
+                            Encoding = newHash
+                            Depth = depth - 1
+                            Score = score
+                            Type = Transposition.Exact
+                            Age = 100
+                        }
 
                     if score >= beta then newBest
                     else loopThroughAllMoves board newAlpha beta newBest rest
@@ -241,14 +249,16 @@ namespace SpellChess.Chess
             Generate.allValidMoves board
             // |> fun l -> List.iter (fun i -> printfn "%s" (Move.toString i)) l; l
             // |> fun l -> printfn "%i" (List.length l); l
-            |> loopThroughAllMoves board alpha beta System.Int32.MinValue
+            |> fun list -> 
+                if List.length list > 0 then loopThroughAllMoves board alpha beta System.Int32.MinValue list
+                else -1200000000 - depth
 
         let findBestMove transposition board depth =
             let rec loopThroughAllMoves board alpha beta bestValue bestMove moveList =
                 match moveList with
                 | move :: rest -> 
-                    let score = - alphaBetaNegaMax transposition (Move.move board move) -beta -alpha (depth - 1)
-                    // printfn "%s %s %i" (String.replicate (6 - depth) "  ") (Move.toString move) score
+                    let score = - alphaBetaNegaMax transposition (Move.move board move) -beta -alpha (depth)
+                    printfn "%s %s %i" (String.replicate 0 "  ") (Move.toString move) score
                     let newBest, newBestMove =
                         if score > bestValue then score, Some move else bestValue, bestMove
                     let newAlpha = max score alpha
@@ -267,7 +277,12 @@ namespace SpellChess.Chess
             else
             
             Generate.allValidMoves board
-            |> List.sumBy (fun move -> countValidMoves (Move.move board move) (depth - 1))
+            |> fun l -> 
+                // List.iter (Move.toDirectString >> printfn "    %s") l
+                l
+            |> List.sumBy (fun move -> 
+                countValidMoves (Move.move board move) (depth - 1)
+            )
 
 // int alphaBeta( int alpha, int beta, int depthleft ) {
 //    if( depthleft == 0 ) return quiesce( alpha, beta );

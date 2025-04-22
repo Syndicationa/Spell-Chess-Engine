@@ -291,10 +291,13 @@ module Board =
     
     let private boardArrayToString (boardArray: byte[]) =
         fun index -> 
-            let piece = Piece.toString boardArray.[index]
-            if index &&& 8 = 0 then $"|\n|-------------------------------|\n| %s{piece}" else $"| %s{piece}"
+            let rank = index >>> 3
+            let file = index &&& 7
+            let correctedRank = 7 - rank
+            let piece = Piece.toString boardArray.[(correctedRank <<< 3) + file]
+            if index &&& 7 = 0 then $"\n|-------------------------------|\n| %s{piece}| " else $"%s{piece}| "
         |> String.init 64
-        |> (+) <| "|-------------------------------|\n"
+        |> (+) <| "\n|-------------------------------|\n"
 
     let toString (board: Board) = 
         match board.ActiveColor with
@@ -318,6 +321,48 @@ module Move =
             | CapturePromotion (_,target) -> piece + "x" + targetSquare + Piece.toString target
             | Castle KingSide -> "O-O"
             | Castle QueenSide -> "O-O-O"
+
+        let toDirectString (move: Move) =
+            let piece = Piece.toString move.Piece
+
+            let sourceSquare = 
+                string (char (move.Source &&& 7) + 'a') + string ((move.Source >>> 3) + 1)
+
+            let targetSquare = 
+                string (char (move.Target &&& 7) + 'a') + string ((move.Target >>> 3) + 1)
+                // string move.Target
+            
+            $"{sourceSquare} {targetSquare}"
+
+        let fromString (source: string) (target: string) (promotion: PieceType option) board =
+            let sourceInt = 
+                Location.fromString source
+                |> Option.defaultValue (File.A, Rank.One)
+                |> Location.toInt
+            
+            let targetInt = 
+                Location.fromString target
+                |> Option.defaultValue (File.A, Rank.One)
+                |> Location.toInt
+
+            let piece = board.Board.[sourceInt]
+            let targetPiece = board.Board.[targetInt]
+
+            let moveType =
+                match Piece.pieceType piece, targetPiece, promotion with
+                | PieceType.Pawn, 0uy, None when sourceInt - targetInt &&& 7 <> 0 -> EnPassant
+                | PieceType.Pawn, 0uy, Some promotion -> Promotion (Piece.promote piece promotion)
+                | _, 0uy, _ -> Normal
+                | PieceType.Pawn, target, Some promotion -> CapturePromotion (target, Piece.promote piece promotion)
+                | _, target, _ -> Capture target
+
+            {
+                Source = sourceInt
+                Target = targetInt
+                Piece = piece
+                Flags = moveType
+            }
+
 
         let private normalMove (board: Board) (move: Move) =
             let newBoardArray = Array.copy board.Board
@@ -362,6 +407,56 @@ module Move =
             {Board.getPlayer board with KingLocation = move.Target}
             |> Board.setPlayer <| board
 
+        let private updateEnPassant move board =
+            let enPassant = 
+                if Piece.pieceType move.Piece <> PieceType.Pawn || abs (move.Source - move.Target) <> 16 then None
+                else Some move.Target
+            {board with EnPassant = enPassant}
+
+        let private invalidateCastling move board =
+            let kingMove = Piece.pieceType move.Piece = PieceType.King
+            let baseRookMove = 
+                match board.ActiveColor with
+                | Color.White -> move.Source = 0 || move.Source = 7
+                | Color.Black -> move.Source = 56 || move.Source = 63
+                | _ -> false
+
+            let baseRookCapture = 
+                match board.ActiveColor with
+                | Color.White -> move.Target = 56 || move.Target = 63
+                | Color.Black -> move.Target = 0 || move.Target = 7
+                | _ -> false
+
+            if not baseRookCapture && not kingMove && not baseRookMove then board
+            else
+
+            let kingSideMove = move.Source &&& 7 = 7
+            let kingSideCapture = move.Target &&& 7 = 7
+
+            let player = Board.getPlayer board
+            let opponent = Board.getOpponent board
+
+            let playerKing, playerQueen = player.Castling
+            let opponentKing, opponentQueen = opponent.Castling
+
+            let newPlayer = {
+                player 
+                with Castling = if kingMove then false, false
+                                elif baseRookMove && kingSideMove then false, playerQueen
+                                elif baseRookMove then playerKing, false
+                                else playerKing, playerQueen
+            }
+
+            let newOpponent = {
+                opponent 
+                with Castling = if baseRookCapture && kingSideCapture then false, opponentQueen
+                                elif baseRookCapture then opponentKing, false
+                                else opponentKing, opponentQueen
+            }
+
+            Board.setPlayer newPlayer board
+            |> Board.setOpponent newOpponent
+
         let private nextPlayer (board: Board) =
             let nextPlayer = 
                 match board.ActiveColor with
@@ -371,7 +466,7 @@ module Move =
 
             {board with ActiveColor = nextPlayer}
 
-        let fiftyMoveRule move board = 
+        let private fiftyMoveRule move board = 
             match move.Flags with
             | Capture _ -> true
             | _ -> false
@@ -395,6 +490,8 @@ module Move =
                 normalMove board move
                 |> promote move pieceType
             |> updateKing move
+            |> updateEnPassant move
+            |> invalidateCastling move
             |> nextPlayer
             |> fiftyMoveRule move
             |> fun x -> {x with Moves = move :: x.Moves}
