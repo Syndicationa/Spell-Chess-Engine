@@ -177,7 +177,6 @@ type Board = {
     Black: Player
     EnPassant: int option
     HalfmoveCount: int
-    Moves: Move list
 }
 
 module Board = 
@@ -262,7 +261,6 @@ module Board =
             Black = Black
             EnPassant = enPassantTarget
             HalfmoveCount = HalfmoveCount
-            Moves = []
         }
 
     let getPlayer board =
@@ -494,4 +492,3 @@ module Move =
             |> invalidateCastling move
             |> nextPlayer
             |> fiftyMoveRule move
-            |> fun x -> {x with Moves = move :: x.Moves}

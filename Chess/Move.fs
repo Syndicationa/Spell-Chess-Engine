@@ -217,7 +217,7 @@ namespace SpellChess.Chess
 
             canAttackLeft || canAttackRight
 
-        let private safeSquare (board: Board) (location: int) =
+        let safeSquare (board: Board) (location: int) =
             let oPawn = Piece.generate board.ActiveColor PieceType.Pawn
             let oKnight = Piece.generate board.ActiveColor PieceType.Knight
             let oBishop = Piece.generate board.ActiveColor PieceType.Bishop
@@ -269,13 +269,13 @@ namespace SpellChess.Chess
             |> List.fold (fun list loc -> List.append list (validMoves board loc)) []
 
     module Evaluate = 
-        let private pieceValue piece =
+        let pieceValue piece =
             match piece with
-            | PieceType.Queen -> 9
-            | PieceType.Rook -> 5
-            | PieceType.Bishop -> 3
-            | PieceType.Knight -> 3
-            | PieceType.Pawn -> 1
+            | PieceType.Queen -> 90
+            | PieceType.Rook -> 50
+            | PieceType.Bishop -> 30
+            | PieceType.Knight -> 30
+            | PieceType.Pawn -> 10
             | _ -> 0
 
         let private boardValue =
@@ -288,11 +288,37 @@ namespace SpellChess.Chess
             )
             |> Array.fold <| (0, 0)
 
+        let private captureValue capturingPiece targetPiece =
+            pieceValue (Piece.pieceType targetPiece) - pieceValue (Piece.pieceType capturingPiece)
+
+        let private promotionValue promotionTarget =
+            pieceValue PieceType.Pawn
+            |> (-) (pieceValue (Piece.pieceType promotionTarget))
+
+        let prescore move =
+            match move.Flags with
+            | Capture target -> captureValue move.Piece target
+            | Promotion target -> promotionValue target
+            | CapturePromotion (captured, promotion) -> 
+                captureValue move.Piece captured + promotionValue promotion
+            | _ -> 0
+
+        let determineCheck board =
+            (Board.getPlayer board).KingLocation
+            |> Generate.safeSquare board
 
         let determineMate board = 
             Generate.allValidMoves board
             |> List.length
             |> (=) 0
+            |> (&&) (determineCheck board)
+
+        let determineStalemate board =
+            Generate.allValidMoves board
+            |> List.length
+            |> (=) 0
+            |> (&&) (not (determineCheck board))
+            |> (||) (board.HalfmoveCount >= 50)
 
         let evaluate (board: Board) =
             if determineMate board then -10000000

@@ -199,8 +199,15 @@ namespace SpellChess.Chess
             | _ -> table.Table.[entry.Encoding] <- entry
 
     module Search =
-        let rec alphaBetaNegaMax (table: Transposition.Table) board alpha beta depth =
-            let hashing = Transposition.encodeBoard table.Generator board
+        // let mutable evilNumber = 0
+
+        let sortMoves =
+            List.sortBy Evaluate.prescore
+
+        let rec alphaBetaNegaMax (table: Transposition.Table) board hash alpha beta depth =
+            let hashing = 
+                hash
+                |> Option.defaultValue (Transposition.encodeBoard table.Generator board)
 
             let previousEval = Transposition.tryLookup table hashing
             let previousDepth = 
@@ -216,13 +223,15 @@ namespace SpellChess.Chess
             elif depth = 0 then Evaluate.evaluate board
             else
 
+            // evilNumber <- evilNumber + 1
+
             let rec loopThroughAllMoves board alpha beta bestValue moveList =
                 match moveList with
                 | move :: rest -> 
                     let newBoard = Move.move board move
                     let newHash: uint64 = Transposition.encodeMove table.Generator hashing board newBoard move
 
-                    let score = - alphaBetaNegaMax table newBoard -beta -alpha (depth - 1)
+                    let score = - alphaBetaNegaMax table newBoard (Some newHash) -beta -alpha (depth - 1)
                     // printfn "%s %s %i" (String.replicate (6 - depth) "  ") (Move.toString move) score
                     let newBest = max score bestValue
                     let newAlpha = max score alpha
@@ -247,18 +256,18 @@ namespace SpellChess.Chess
                 | [] -> bestValue
 
             Generate.allValidMoves board
-            // |> fun l -> List.iter (fun i -> printfn "%s" (Move.toString i)) l; l
-            // |> fun l -> printfn "%i" (List.length l); l
+            |> sortMoves
             |> fun list -> 
                 if List.length list > 0 then loopThroughAllMoves board alpha beta System.Int32.MinValue list
                 else -1200000000 - depth
 
         let findBestMove transposition board depth =
+            // evilNumber <- 0
             let rec loopThroughAllMoves board alpha beta bestValue bestMove moveList =
                 match moveList with
                 | move :: rest -> 
-                    let score = - alphaBetaNegaMax transposition (Move.move board move) -beta -alpha (depth)
-                    printfn "%s %s %i" (String.replicate 0 "  ") (Move.toString move) score
+                    let score = - alphaBetaNegaMax transposition (Move.move board move) None -beta -alpha depth
+                    // printfn "%s %s %i" (String.replicate 0 "  ") (Move.toString move) score
                     let newBest, newBestMove =
                         if score > bestValue then score, Some move else bestValue, bestMove
                     let newAlpha = max score alpha
@@ -271,6 +280,7 @@ namespace SpellChess.Chess
             // |> (fun list -> [List.item 19 list])
             |> loopThroughAllMoves board -System.Int32.MaxValue System.Int32.MaxValue -System.Int32.MaxValue None
             |> fun x -> transposition, x
+            // |> fun x -> printfn "Positions searched: %i" evilNumber; x
 
         let rec countValidMoves board depth =
             if  depth = 0 then 1
