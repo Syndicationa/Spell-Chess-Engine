@@ -11,7 +11,6 @@
     <Compile Include="Chess\Move.fs" />
     <Compile Include="Chess\Transposition.fs" />
     <Compile Include="Chess\Evaluation.fs" />
-    <Compile Include="Chess.fs" />
     <Compile Include="Display.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
