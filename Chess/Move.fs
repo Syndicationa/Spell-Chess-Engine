@@ -1,4 +1,23 @@
 namespace SpellChess.Chess
+    type CastleDirection = 
+    | KingSide
+    | QueenSide
+
+    type MoveType =
+        | Normal
+        | Capture of Piece
+        | Castle of CastleDirection
+        | EnPassant
+        | Promotion of Piece
+        | CapturePromotion of Piece * Piece
+
+    type Move = {
+        Piece: Piece
+        Source: int
+        Target: int
+        Flags: MoveType
+    }
+
     module Move =
         let toString (move: Move) =
             let piece = Piece.toString move.Piece

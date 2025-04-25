@@ -151,25 +151,6 @@ module Location =
     let toInt (file: File, rank: Rank) =
         (int rank <<< 3) + int file
 
-type CastleDirection = 
-    | KingSide
-    | QueenSide
-
-type MoveType =
-    | Normal
-    | Capture of Piece
-    | Castle of CastleDirection
-    | EnPassant
-    | Promotion of Piece
-    | CapturePromotion of Piece * Piece
-
-type Move = {
-    Piece: Piece
-    Source: int
-    Target: int
-    Flags: MoveType
-}
-
 type Board = {
     ActiveColor: Color
     Board: byte[]
