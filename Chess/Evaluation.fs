@@ -20,7 +20,7 @@ namespace SpellChess.Chess
             |> Array.fold <| (0, 0)
 
         let private captureValue capturingPiece targetPiece =
-            pieceValue (Piece.pieceType targetPiece) - pieceValue (Piece.pieceType capturingPiece)
+            10 * pieceValue (Piece.pieceType targetPiece) - pieceValue (Piece.pieceType capturingPiece)
 
         let private promotionValue promotionTarget =
             pieceValue PieceType.Pawn
@@ -37,6 +37,7 @@ namespace SpellChess.Chess
         let determineCheck board =
             (Board.getPlayer board).KingLocation
             |> Generate.safeSquare board
+            |> not
 
         let determineMate board = 
             Generate.allValidMoves board
@@ -62,16 +63,16 @@ namespace SpellChess.Chess
             | _ -> -3000
 
     module Search =
-        // let mutable evilNumber = 0
+        open System.Diagnostics
+
         let sortMoves =
-            List.sortBy Evaluate.prescore
+            List.sortByDescending Evaluate.prescore
 
-        let rec alphaBetaNegaMax (table: Transposition.Table) board hash alpha beta depth =
-            let hashing = 
-                hash
-                |> Option.defaultValue (Transposition.encodeBoard table.Generator board)
-
-            let previousEval = Transposition.tryLookup table hashing
+        let rec alphaBetaNegaMax (stopwatch: Stopwatch) timeLimit (table: Transposition.Table) board hash alpha beta depth =
+            if stopwatch.ElapsedMilliseconds >= timeLimit then System.Int32.MaxValue
+            else
+            
+            let previousEval = Transposition.tryLookup table hash
             let previousDepth = 
                 match previousEval with 
                 | Some eval -> eval.Depth
@@ -87,71 +88,108 @@ namespace SpellChess.Chess
 
             // evilNumber <- evilNumber + 1
 
-            let rec loopThroughAllMoves board alpha beta bestValue moveList =
+            let rec loopThroughAllMoves alpha beta bestValue moveList =
                 match moveList with
                 | move :: rest -> 
                     let newBoard = Move.move board move
-                    let newHash: uint64 = Transposition.encodeMove table.Generator hashing board newBoard move
+                    let newHash: uint64 = Transposition.encodeMove table.Generator hash board newBoard move
 
-                    let score = - alphaBetaNegaMax table newBoard (Some newHash) -beta -alpha (depth - 1)
-                    // printfn "%s %s %i" (String.replicate (6 - depth) "  ") (Move.toString move) score
+                    let score = - alphaBetaNegaMax stopwatch timeLimit table newBoard newHash -beta -alpha (depth - 1)
+                    // if debug then printfn "%s %s %i" (String.replicate (6 - depth) "  ") (Move.toString move) score
                     let newBest = max score bestValue
                     let newAlpha = max score alpha
+                    
+                    Transposition.save table {
+                        Encoding = newHash
+                        Depth = depth - 1
+                        Score = score
+                        Type = Transposition.Exact
+                        Age = board.MoveCount
+                    }
 
-                    let previousEval = Transposition.tryLookup table newHash;
-                    let previousDepth = 
-                        match previousEval with 
-                        | Some eval -> eval.Depth
-                        | None -> -1
-
-                    if previousDepth < depth - 1 then
-                        Transposition.save table {
-                            Encoding = newHash
-                            Depth = depth - 1
-                            Score = score
-                            Type = Transposition.Exact
-                            Age = 100
-                        }
-
-                    if score >= beta then newBest
-                    else loopThroughAllMoves board newAlpha beta newBest rest
+                    if score >= beta then score
+                    else loopThroughAllMoves newAlpha beta newBest rest
                 | [] -> bestValue
 
             Generate.allValidMoves board
             |> sortMoves
-            |> fun list -> 
-                if List.length list > 0 then loopThroughAllMoves board alpha beta System.Int32.MinValue list
-                else -1200000000 - depth
+            |> function
+                | [] when not (Evaluate.determineCheck board) || board.MoveCount > 50 -> 0
+                | [] -> -1200000000 - depth
+                | list -> loopThroughAllMoves alpha beta -System.Int32.MaxValue list
 
-        let findBestMove transposition board depth =
-            // evilNumber <- 0
-            let rec loopThroughAllMoves board alpha beta bestValue bestMove moveList =
-                match moveList with
-                | move :: rest -> 
-                    let score = - alphaBetaNegaMax transposition (Move.move board move) None -beta -alpha depth
-                    // printfn "%s %s %i" (String.replicate 0 "  ") (Move.toString move) score
-                    let newBest, newBestMove =
-                        if score > bestValue then score, Some move else bestValue, bestMove
-                    let newAlpha = max score alpha
+        let findBestMove (transposition: Transposition.Table) board length =
+            let boardHash = Transposition.encodeBoard transposition.Generator board
 
-                    if score >= beta then newBest, newBestMove
-                    else loopThroughAllMoves board newAlpha beta newBest newBestMove rest
-                | [] -> bestValue, bestMove
+            let stopwatch = Stopwatch.StartNew()
+            let mutable moveList = 
+                Generate.allValidMoves board
+                |> List.toArray
+                |> Array.map (fun x -> Evaluate.prescore x, x)
+                |> Array.sortBy fst
+            let mutable iterationDepth = 0
+            let mutable alpha = -System.Int32.MaxValue
+            let mutable beta = System.Int32.MaxValue
+            let mutable bestScore = - System.Int32.MaxValue
+            let mutable bestMove = snd moveList.[0]
+            let mutable currentBestScore, currentBestMove = bestScore, bestMove
 
-            Generate.allValidMoves board
-            // |> (fun list -> [List.item 19 list])
-            |> loopThroughAllMoves board -System.Int32.MaxValue System.Int32.MaxValue -System.Int32.MaxValue None
-            |> fun x -> transposition, x
-            // |> fun x -> printfn "Positions searched: %i" evilNumber; x
+            if Array.length moveList = 1 then transposition, moveList.[0]
+            else
+
+            while stopwatch.ElapsedMilliseconds < length do
+                alpha <- - System.Int32.MaxValue
+                beta <- System.Int32.MaxValue
+                currentBestScore <- alpha
+
+                moveList <- Array.map (fun (previousScore: int, move) ->
+                    if stopwatch.ElapsedMilliseconds >= length then previousScore, move
+                    else
+                    let newBoard = Move.move board move
+                    let newHash = Transposition.encodeMove transposition.Generator boardHash board newBoard move
+
+                    let score = 
+                        -alphaBetaNegaMax stopwatch length transposition newBoard newHash -beta -alpha iterationDepth
+
+                    if stopwatch.ElapsedMilliseconds >= length then previousScore, move
+                    else
+
+                    printfn "Score of %s is %i at depth %i" (Move.toString move) score iterationDepth
+
+                    if score > currentBestScore then
+                        currentBestScore <- score
+                        currentBestMove <- move
+
+                    alpha <- max alpha score
+
+                    Transposition.save transposition {
+                        Encoding = newHash
+                        Depth = iterationDepth - 1
+                        Score = score
+                        Type = Transposition.Exact
+                        Age = board.MoveCount
+                    }
+
+                    score, move
+                ) moveList
+
+                moveList <- Array.sortByDescending fst moveList
+                bestScore <- fst moveList.[0]
+                bestMove <- snd moveList.[0]
+
+                if stopwatch.ElapsedMilliseconds < length then
+                    iterationDepth <- iterationDepth + 1
+
+            stopwatch.Stop()
+            printfn "Searched to a depth of %i taking %i" iterationDepth stopwatch.ElapsedMilliseconds
+            
+            transposition, (bestScore, bestMove)
 
         let rec countValidMoves board depth =
             if  depth = 0 then 1
             else
             
             Generate.allValidMoves board
-            |> fun l -> 
-                // List.iter (Move.toDirectString >> printfn "    %s") l
-                l
             |> List.sumBy (fun move -> 
                 countValidMoves (Move.move board move) (depth - 1)
             )

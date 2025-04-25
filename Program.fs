@@ -31,7 +31,7 @@ module Program =
     let main(args: string[]) =
         System.Console.OutputEncoding <- System.Text.Encoding.UTF8
         
-        let board = Chess.Board.create "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 1 8"
+        let board = Chess.Board.create "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
         let moveRegex =  Regex "([a-h][1-8])([a-h][1-8])(?:=([QRBN]))?"
 
@@ -96,7 +96,8 @@ module Program =
                 | _ -> None
 
         let rec temporaryGameLoop human (transposition: Chess.Transposition.Table, board) =
-            if Chess.Evaluate.determineMate board then "Game Over\n" + Chess.Board.toString board else
+            if List.length (Chess.Generate.allValidMoves board) = 0 then "Game Over\n" + Chess.Board.toString board else
+            printfn "Size of Table %i" transposition.Table.Count
 
             if board.ActiveColor = human then
                 Chess.Board.toString board
@@ -110,14 +111,11 @@ module Program =
                 //Do Human Stuff
             else
                 let stopwatch = System.Diagnostics.Stopwatch.StartNew()
-                Chess.Search.findBestMove transposition board 3
+                Chess.Search.findBestMove transposition board 1000
                 |> fun x -> 
                     stopwatch.Stop()
-                    printfn "Move took: %i" stopwatch.Elapsed.Milliseconds
+                    printfn "Move took: %i" stopwatch.ElapsedMilliseconds
                     x
-                |> secTup (secTup (fun move -> 
-                    move
-                    |> Option.defaultValue {Piece = 0uy; Source = -1; Target = -1; Flags = Chess.MoveType.Normal}))
                 |> secTup (fun (score, m) -> printfn "Black played: %s scored at %i" (Chess.Move.toString m) score; m)
                 |> secTup (Chess.Move.move board)
             |> temporaryGameLoop human
