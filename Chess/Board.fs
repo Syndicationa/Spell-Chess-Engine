@@ -176,6 +176,7 @@ type Board = {
     White: Player
     Black: Player
     EnPassant: int option
+    MoveCount: int
     HalfmoveCount: int
 }
 
@@ -185,10 +186,10 @@ module Board =
         let mutable wKing, bKing = -1, -1;
         let mutable idx = 56
 
-        let pieces, active, castling, enPassant, halfMove = 
+        let pieces, active, castling, enPassant, halfMove, fullMove = 
             match fen.Split ' ' with
-            | [|a;b;c;d;e;f|] -> a,b,c,d,e
-            | _ -> "a","b","c","d","e"
+            | [|a;b;c;d;e;f|] -> a,b,c,d,e,f
+            | _ -> "a","b","c","d","e","f"
 
         String.iter (fun char -> 
             if char = '/' then idx <- idx - 16
@@ -243,6 +244,7 @@ module Board =
             |> Option.map Location.toInt 
 
         let HalfmoveCount = int halfMove
+        let MoveCount = int fullMove
 
         let White = {
             KingLocation = wKing
@@ -260,6 +262,7 @@ module Board =
             White = White
             Black = Black
             EnPassant = enPassantTarget
+            MoveCount = MoveCount
             HalfmoveCount = HalfmoveCount
         }
 

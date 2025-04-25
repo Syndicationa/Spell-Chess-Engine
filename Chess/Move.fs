@@ -151,13 +151,13 @@ namespace SpellChess.Chess
             |> Board.setOpponent newOpponent
 
         let private nextPlayer (board: Board) =
-            let nextPlayer = 
+            let nextPlayer, moveCount = 
                 match board.ActiveColor with
-                | Color.White -> Color.Black
-                | Color.Black -> Color.White
-                | _ -> Color.Black
+                | Color.White -> Color.Black, board.MoveCount
+                | Color.Black -> Color.White, board.MoveCount + 1
+                | _ -> Color.Black, -1
 
-            {board with ActiveColor = nextPlayer}
+            {board with ActiveColor = nextPlayer; MoveCount = moveCount}
 
         let private fiftyMoveRule move board = 
             match move.Flags with
