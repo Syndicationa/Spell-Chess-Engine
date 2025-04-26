@@ -53,7 +53,7 @@ namespace SpellChess.Chess
             |> (||) (board.HalfmoveCount >= 50)
 
         let evaluate (board: Board) =
-            if determineMate board then -10000000
+            if determineMate board then 1200000000
             else 
             let white, black = boardValue board.Board
 
@@ -149,12 +149,12 @@ namespace SpellChess.Chess
                     let newHash = Transposition.encodeMove transposition.Generator boardHash board newBoard move
 
                     let score = 
-                        -alphaBetaNegaMax stopwatch length transposition newBoard newHash -beta -alpha iterationDepth
+                        - alphaBetaNegaMax stopwatch length transposition newBoard newHash -beta -alpha iterationDepth
 
                     if stopwatch.ElapsedMilliseconds >= length then previousScore, move
                     else
 
-                    printfn "Score of %s is %i at depth %i" (Move.toString move) score iterationDepth
+                    // printfn "Score of %s is %i at depth %i" (Move.toString move) score iterationDepth
 
                     if score > currentBestScore then
                         currentBestScore <- score
