@@ -68,22 +68,33 @@ namespace SpellChess.Chess
         let sortMoves =
             List.sortByDescending Evaluate.prescore
 
-        let rec alphaBetaNegaMax (stopwatch: Stopwatch) timeLimit (table: Transposition.Table) board hash alpha beta depth =
+        let rec alphaBetaNegaMax (stopwatch: Stopwatch) timeLimit (table: TranspositionTable) board hash alpha beta depth =
             if stopwatch.ElapsedMilliseconds >= timeLimit then System.Int32.MaxValue
             else
             
-            let previousEval = Transposition.tryLookup table hash
-            let previousDepth = 
-                match previousEval with 
-                | Some eval -> eval.Depth
-                | None -> -1
+            let previousScore = 
+                match Transposition.tryLookup table hash with 
+                | Some eval when eval.Depth >= depth ->
+                    match eval.Type with
+                    | Exact -> Some eval.Score
+                    | Lower when eval.Score >= beta -> Some eval.Score
+                    | Upper when eval.Score <= alpha -> Some eval.Score
+                    | _ -> None
+                | _ -> None
             
-            if depth < previousDepth then 
-                // printfn "Transposition Hit!"
-                previousEval
-                |> Option.map (fun entry -> entry.Score)
+            if Option.isSome previousScore then 
+                previousScore
                 |> Option.defaultValue System.Int32.MinValue
-            elif depth = 0 then Evaluate.evaluate board
+            elif depth = 0 then 
+                let eval = Evaluate.evaluate board
+                Transposition.save table {
+                        Encoding = hash
+                        Depth = depth - 1
+                        Score = eval
+                        Type = Exact
+                        Age = board.MoveCount
+                }
+                eval
             else
 
             // evilNumber <- evilNumber + 1
@@ -103,7 +114,7 @@ namespace SpellChess.Chess
                         Encoding = newHash
                         Depth = depth - 1
                         Score = score
-                        Type = Transposition.Exact
+                        Type = if score >= beta then Lower elif score <= alpha then Upper else Exact
                         Age = board.MoveCount
                     }
 
@@ -118,7 +129,7 @@ namespace SpellChess.Chess
                 | [] -> -1200000000 - depth
                 | list -> loopThroughAllMoves alpha beta -System.Int32.MaxValue list
 
-        let findBestMove (transposition: Transposition.Table) board length =
+        let findBestMove (transposition: TranspositionTable) board length =
             let boardHash = Transposition.encodeBoard transposition.Generator board
 
             let stopwatch = Stopwatch.StartNew()
@@ -166,7 +177,7 @@ namespace SpellChess.Chess
                         Encoding = newHash
                         Depth = iterationDepth - 1
                         Score = score
-                        Type = Transposition.Exact
+                        Type = Exact
                         Age = board.MoveCount
                     }
 

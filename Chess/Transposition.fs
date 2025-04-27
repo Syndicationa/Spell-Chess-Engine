@@ -1,15 +1,6 @@
 namespace SpellChess.Chess
-    module Transposition = 
-        open System.Collections.Generic
-
-        module Random = 
-            let private xorShiftLeft shift x = x ^^^ (x <<< shift)
-            let private xorShiftRight shift x = x ^^^ (x >>> shift)
-
-            //pseudoRNG stolen from Wikipedia
-            let generate = xorShiftLeft 13 >> xorShiftRight 7 >> xorShiftLeft 17
-        
-        type Generator = {
+    open System.Collections.Generic
+    type Generator = {
             WhitePositions: PieceBoards list
             BlackPositions: PieceBoards list
             Black: uint64
@@ -17,6 +8,34 @@ namespace SpellChess.Chess
             EnPassantFile: uint64 array
         }
 
+    
+    type EntryType =
+            | Exact
+            | Lower
+            | Upper
+
+    type Entry = {
+        Encoding: uint64
+        Depth: int
+        Score: int
+        Type: EntryType
+        Age: int
+    }
+
+    type TranspositionTable = {
+        Generator: Generator
+        Table: Dictionary<uint64, Entry>
+    }
+
+
+    module Transposition = 
+        module Random = 
+            let private xorShiftLeft shift x = x ^^^ (x <<< shift)
+            let private xorShiftRight shift x = x ^^^ (x >>> shift)
+
+            //pseudoRNG stolen from Wikipedia
+            let generate = xorShiftLeft 13 >> xorShiftRight 7 >> xorShiftLeft 17
+        
         module private Generator =
             let makePositions (seed: uint64) =
                 let king = Random.generate seed
@@ -162,24 +181,6 @@ namespace SpellChess.Chess
             |> (^^^) oldPassant
             |> (^^^) newPassant
             |> (^^^) generator.Black
-
-        type EntryType =
-            | Exact
-            | Lower
-            | Upper
-
-        type Entry = {
-            Encoding: uint64
-            Depth: int
-            Score: int
-            Type: EntryType
-            Age: int
-        }
-
-        type Table = {
-            Generator: Generator
-            Table: Dictionary<uint64, Entry>
-        }
 
         let createTable seed =
             {
