@@ -11,6 +11,13 @@
     <Compile Include="Chess\Move.fs" />
     <Compile Include="Chess\Transposition.fs" />
     <Compile Include="Chess\Evaluation.fs" />
+    
+    <Compile Include="Tinyhouse\Board.fs" />
+    <Compile Include="Tinyhouse\Move.fs" />
+    <Compile Include="Tinyhouse\Transposition.fs" />
+    <Compile Include="Tinyhouse\Evaluation.fs" />
+    
+
     <Compile Include="Display.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

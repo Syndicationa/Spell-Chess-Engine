@@ -1,8 +1,8 @@
-namespace SpellChess.Chess
+namespace SpellChess.Tinyhouse
 
-module Hexuple =
-    let toArray (a, b, c, d, e, f) = [|a; b; c; d; e; f|]
-    let toList (a, b, c, d, e, f) = [a; b; c; d; e; f]
+module Pentuple =
+    let toArray (a, b, c, d, e) = [|a; b; c; d; e|]
+    let toList (a, b, c, d, e) = [a; b; c; d; e]
 
 type Color = 
     | Nil = 0
@@ -19,11 +19,10 @@ module Color =
 
 type PieceType = 
 | King = 0
-| Queen = 1
-| Rook = 2
-| Bishop = 3
-| Knight = 4
-| Pawn = 5
+| Wazir = 1
+| Ferz = 2
+| Xiangqi = 3
+| Pawn = 4
 
 type Piece = byte
 
@@ -39,23 +38,25 @@ module Piece =
 
     let promote (piece: Piece) (target: PieceType) =
         generate (color piece) target
+        |> (+) 32uy //This flags it was a pawn
+
+    let originalType (piece: Piece) =
+        if piece &&& 32uy = 32uy then PieceType.Pawn
+        else pieceType piece
 
     let toString piece =
         match piece with
-            | p when p = generate Color.White PieceType.King -> "♔ "
-            | p when p = generate Color.Black PieceType.King -> "♚ "
+            | p when p = generate Color.White PieceType.King -> "K "
+            | p when p = generate Color.Black PieceType.King -> "k "
 
-            | p when p = generate Color.White PieceType.Queen -> "♕ "
-            | p when p = generate Color.Black PieceType.Queen -> "♛ "
+            | p when p = generate Color.White PieceType.Wazir -> "W "
+            | p when p = generate Color.Black PieceType.Wazir -> "w "
 
-            | p when p = generate Color.White PieceType.Rook -> "♖ "
-            | p when p = generate Color.Black PieceType.Rook -> "♜ "
+            | p when p = generate Color.White PieceType.Ferz -> "F "
+            | p when p = generate Color.Black PieceType.Ferz -> "f "
 
-            | p when p = generate Color.White PieceType.Bishop -> "♗ "
-            | p when p = generate Color.Black PieceType.Bishop -> "♝ "
-
-            | p when p = generate Color.White PieceType.Knight -> "♘ "
-            | p when p = generate Color.Black PieceType.Knight -> "♞ "
+            | p when p = generate Color.White PieceType.Xiangqi -> "U "
+            | p when p = generate Color.Black PieceType.Xiangqi -> "u "
 
             | p when p = generate Color.White PieceType.Pawn -> "♙ "
             | p when p = generate Color.Black PieceType.Pawn -> "♟ "
@@ -79,44 +80,41 @@ module BitBoard =
         >> sumOfANDandShiftedAND 0x0000FFFF0000FFFFuL 16
         >> sumOfANDandShiftedAND 0x00000000FFFFFFFFuL 32
 
-type PieceBoards = BitBoard * BitBoard * BitBoard * BitBoard * BitBoard * BitBoard
+type PieceBoards = BitBoard * BitBoard * BitBoard * BitBoard * BitBoard
 module PieceBoards =
     let getBitBoard pieceType (pieces: PieceBoards) =
-        let king, queen, rook, bishop, knight, pawn = pieces
+        let king, wazir, ferz, xiangqi, pawn = pieces
         match pieceType with 
         | PieceType.King -> king
-        | PieceType.Queen -> queen
-        | PieceType.Rook -> rook
-        | PieceType.Bishop -> bishop
-        | PieceType.Knight -> knight
+        | PieceType.Wazir -> wazir
+        | PieceType.Ferz -> ferz
+        | PieceType.Xiangqi -> xiangqi
         | PieceType.Pawn -> pawn
         | _ -> 0uL
 
     let setBitBoard piece pieces bitBoard =
-        let king, queen, rook, bishop, knight, pawn = pieces
+        let king, queen, wazir, ferz, xiangqi, pawn = pieces
         match piece with 
-        | PieceType.King -> bitBoard, queen, rook, bishop, knight, pawn
-        | PieceType.Queen -> king, bitBoard, rook, bishop, knight, pawn
-        | PieceType.Rook -> king, queen, bitBoard, bishop, knight, pawn
-        | PieceType.Bishop -> king, queen, rook, bitBoard, knight, pawn
-        | PieceType.Knight -> king, queen, rook, bishop, bitBoard, pawn
-        | PieceType.Pawn -> king, queen, rook, bishop, knight, bitBoard
+        | PieceType.King -> bitBoard, queen, wazir, ferz, xiangqi, pawn
+        | PieceType.Wazir -> king, queen, bitBoard, ferz, xiangqi, pawn
+        | PieceType.Ferz -> king, queen, wazir, bitBoard, xiangqi, pawn
+        | PieceType.Xiangqi -> king, queen, wazir, ferz, bitBoard, pawn
+        | PieceType.Pawn -> king, queen, wazir, ferz, xiangqi, bitBoard
         | _ -> pieces
 
     let getPieceAtLocation (pieces: PieceBoards) (location: int) =
-        let king, queen, rook, bishop, knight, pawn = pieces
+        let king, wazir, ferz, xiangqi, pawn = pieces
         match 1uL <<< location with
         | x when king &&& x <> 0uL -> Some PieceType.King
-        | x when queen &&& x <> 0uL -> Some PieceType.Queen
-        | x when rook &&& x <> 0uL -> Some PieceType.Rook
-        | x when bishop &&& x <> 0uL -> Some PieceType.Bishop
-        | x when knight &&& x <> 0uL -> Some PieceType.Knight
+        | x when wazir &&& x <> 0uL -> Some PieceType.Wazir
+        | x when ferz &&& x <> 0uL -> Some PieceType.Ferz
+        | x when xiangqi &&& x <> 0uL -> Some PieceType.Xiangqi
         | x when pawn &&& x <> 0uL -> Some PieceType.Pawn
         | x -> None
 
 type Player = {
     KingLocation: int
-    Castling: bool * bool
+    Placeables: int array
 }
 
 type Rank = 
@@ -124,20 +122,12 @@ type Rank =
     | Two = 1 
     | Three = 2
     | Four = 3
-    | Five = 4 
-    | Six = 5
-    | Seven = 6
-    | Eight = 7
 
 type File = 
     | A = 0
     | B = 1
     | C = 2
     | D = 3
-    | E = 4
-    | F = 5
-    | G = 6
-    | H = 7
 
 type Location = File * Rank
 module Location =
@@ -149,31 +139,30 @@ module Location =
         Some (file, rank)
 
     let toInt (file: File, rank: Rank) =
-        (int rank <<< 3) + int file
+        (int rank <<< 2) + int file
 
 type Board = {
     ActiveColor: Color
     Board: byte[]
     White: Player
     Black: Player
-    EnPassant: int option
     MoveCount: int
     HalfmoveCount: int
 }
 
 module Board = 
     let create (fen: string) = 
-        let Board = Array.create 64 0uy
+        let Board = Array.create 16 0uy
         let mutable wKing, bKing = -1, -1;
-        let mutable idx = 56
+        let mutable idx = 12
 
-        let pieces, active, castling, enPassant, halfMove, fullMove = 
+        let pieces, active, halfMove, fullMove = 
             match fen.Split ' ' with
-            | [|a;b;c;d;e;f|] -> a,b,c,d,e,f
-            | _ -> "a","b","c","d","e","f"
+            | [|a;b;e;f|] -> a,b,e,f
+            | _ -> "a","b","e","f"
 
         String.iter (fun char -> 
-            if char = '/' then idx <- idx - 16
+            if char = '/' then idx <- idx - 8
             else
             match char with 
                 | 'K' -> 
@@ -182,14 +171,12 @@ module Board =
                 | 'k' -> 
                     bKing <- idx
                     Piece.generate Color.Black PieceType.King
-                | 'Q' -> Piece.generate Color.White PieceType.Queen
-                | 'q' -> Piece.generate Color.Black PieceType.Queen
-                | 'R' -> Piece.generate Color.White PieceType.Rook
-                | 'r' -> Piece.generate Color.Black PieceType.Rook
-                | 'B' -> Piece.generate Color.White PieceType.Bishop
-                | 'b' -> Piece.generate Color.Black PieceType.Bishop
-                | 'N' -> Piece.generate Color.White PieceType.Knight
-                | 'n' -> Piece.generate Color.Black PieceType.Knight
+                | 'W' -> Piece.generate Color.White PieceType.Wazir
+                | 'w' -> Piece.generate Color.Black PieceType.Wazir
+                | 'F' -> Piece.generate Color.White PieceType.Ferz
+                | 'f' -> Piece.generate Color.Black PieceType.Ferz
+                | 'U' -> Piece.generate Color.White PieceType.Xiangqi
+                | 'u' -> Piece.generate Color.Black PieceType.Xiangqi
                 | 'P' -> Piece.generate Color.White PieceType.Pawn
                 | 'p' -> Piece.generate Color.Black PieceType.Pawn
                 | _ -> 0uy
@@ -207,34 +194,17 @@ module Board =
             | "b" -> Color.Black
             | _ -> Color.White
 
-        let mutable wKingSide, wQueenSide= false, false
-        let mutable bKingSide, bQueenSide= false, false
-
-        String.iter (fun char -> 
-            match char with 
-            | 'K' -> wKingSide <- true
-            | 'k' -> bKingSide <- true
-            | 'Q' -> wQueenSide <- true
-            | 'q' -> bQueenSide <- true
-            | _ -> ()
-        ) castling
-
-        let enPassantTarget = 
-            enPassant
-            |> Location.fromString
-            |> Option.map Location.toInt 
-
         let HalfmoveCount = int halfMove
         let MoveCount = int fullMove
 
         let White = {
             KingLocation = wKing
-            Castling = wKingSide, wQueenSide
+            Placeables = Array.init 4 (fun _ -> 0)
         }
 
         let Black = {
             KingLocation = bKing
-            Castling = bKingSide, bQueenSide
+            Placeables = Array.init 4 (fun _ -> 0)
         }
 
         {
@@ -242,7 +212,6 @@ module Board =
             Board = Board
             White = White
             Black = Black
-            EnPassant = enPassantTarget
             MoveCount = MoveCount
             HalfmoveCount = HalfmoveCount
         }
@@ -273,11 +242,11 @@ module Board =
     
     let private boardArrayToString (boardArray: byte[]) =
         fun index -> 
-            let rank = index >>> 3
-            let file = index &&& 7
-            let correctedRank = 7 - rank
-            let piece = Piece.toString boardArray.[(correctedRank <<< 3) + file]
-            if index &&& 7 = 0 then $"\n|-------------------------------|\n| %s{piece}| " else $"%s{piece}| "
+            let rank = index >>> 2
+            let file = index &&& 3
+            let correctedRank = 3 - rank
+            let piece = Piece.toString boardArray.[(correctedRank <<< 2) + file]
+            if index &&& 3 = 0 then $"\n|-------------------------------|\n| %s{piece}| " else $"%s{piece}| "
         |> String.init 64
         |> (+) <| "\n|-------------------------------|\n"
 
@@ -304,10 +273,9 @@ module Board =
                     str <- 
                         match Piece.pieceType piece with
                         | PieceType.King -> 'k'
-                        | PieceType.Queen -> 'q'
-                        | PieceType.Rook -> 'r'
-                        | PieceType.Bishop -> 'b'
-                        | PieceType.Knight -> 'n'
+                        | PieceType.Wazir -> 'w'
+                        | PieceType.Ferz -> 'f'
+                        | PieceType.Xiangqi -> 'u'
                         | PieceType.Pawn -> 'p'
                         | _ -> ' '
                         |> match Piece.color piece with
@@ -326,32 +294,6 @@ module Board =
             match board.ActiveColor with
             | Color.White -> " w "
             | _ -> " b "
-        
-        str <-
-            match board.White.Castling, board.Black.Castling with
-            | (true, true), (true, true) -> "KQkq"
-            | (true, true), (true, false) -> "KQk"
-            | (true, true), (false, true) -> "KQq"
-            | (true, true), (false, false) -> "KQ"
-            | (true, false), (true, true) -> "Kkq"
-            | (true, false), (true, false) -> "Kk"
-            | (true, false), (false, true) -> "Kq"
-            | (true, false), (false, false) -> "K"
-            | (false, true), (true, true) -> "Qkq"
-            | (false, true), (true, false) -> "Qk"
-            | (false, true), (false, true) -> "Qq"
-            | (false, true), (false, false) -> "Q"
-            | (false, false), (true, true) -> "kq"
-            | (false, false), (true, false) -> "k"
-            | (false, false), (false, true) -> "q"
-            | (false, false), (false, false) -> "-"
-            |> (+) str
-
-        str <- 
-            match board.EnPassant with
-            | None -> "-"
-            | Some square -> string (char (square &&& 7) + 'a') + string ((square >>> 3) + 1)
-            |> (+) (str + " ")
 
         $"{str} {board.HalfmoveCount} {board.MoveCount}"
             

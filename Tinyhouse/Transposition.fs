@@ -1,4 +1,4 @@
-namespace SpellChess.Chess
+namespace SpellChess.Tinyhouse
     open System.Collections.Generic
     type Generator = {
             WhitePositions: PieceBoards list
@@ -39,13 +39,12 @@ namespace SpellChess.Chess
         module private Generator =
             let makePositions (seed: uint64) =
                 let king = Random.generate seed
-                let queen = Random.generate king
-                let rook = Random.generate queen
-                let bishop = Random.generate rook
-                let knight = Random.generate bishop
-                let pawn = Random.generate knight
+                let wazir = Random.generate king
+                let ferz = Random.generate wazir
+                let xiangqi = Random.generate ferz
+                let pawn = Random.generate xiangqi
 
-                (king, queen,rook, bishop, knight, pawn), pawn
+                (king, wazir, ferz, xiangqi, pawn), pawn
 
         let buildGenerator seed =
             let mutable seed = Random.generate seed
@@ -83,8 +82,8 @@ namespace SpellChess.Chess
 
         module private Encode =
             let position board index white black =
-                let wKing, wQueen, wRook, wBishop, wKnight, wPawn = white
-                let bKing, bQueen, bRook, bBishop, bKnight, bPawn = black
+                let wKing, wWazir, wFerz, wXiangqi, wPawn = white
+                let bKing, bWazir, bFerz, bXiangqi, bPawn = black
 
                 let color = Piece.color board.Board.[index]
                 let pieceType = Piece.pieceType board.Board.[index]
@@ -92,35 +91,20 @@ namespace SpellChess.Chess
                 match color, pieceType with
                 | Color.White, PieceType.King -> wKing
                 | Color.Black, PieceType.King -> bKing
-                | Color.White, PieceType.Queen -> wQueen
-                | Color.Black, PieceType.Queen -> bQueen
-                | Color.White, PieceType.Rook -> wRook
-                | Color.Black, PieceType.Rook -> bRook
-                | Color.White, PieceType.Bishop -> wBishop
-                | Color.Black, PieceType.Bishop -> bBishop
-                | Color.White, PieceType.Knight -> wKnight
-                | Color.Black, PieceType.Knight -> bKnight
+                | Color.White, PieceType.Wazir -> wWazir
+                | Color.Black, PieceType.Wazir -> bWazir
+                | Color.White, PieceType.Ferz -> wFerz
+                | Color.Black, PieceType.Ferz -> bFerz
+                | Color.White, PieceType.Xiangqi -> wXiangqi
+                | Color.Black, PieceType.Xiangqi -> bXiangqi
                 | Color.White, PieceType.Pawn -> wPawn
                 | Color.Black, PieceType.Pawn -> bPawn
                 | _, _ -> 0uL
-
-            let inline castling generator board =
-                let wKingSide, wQueenSide = board.White.Castling
-                let bKingSide, bQueenSide = board.Black.Castling
-                
-                let wKing, wQueen, bKing, bQueen = generator.CastlingRights
-
-                if wKingSide then wKing else 0uL
-                |> (^^^) (if wQueenSide then wQueen else 0uL)
-                |> (^^^) (if bKingSide then bKing else 0uL)
-                |> (^^^) (if bQueenSide then bQueen else 0uL)
 
         let encodeBoard (generator: Generator) (board: Board): uint64 =
             List.mapi2 (Encode.position board) generator.WhitePositions generator.BlackPositions
             |> List.fold (fun accumulator item -> accumulator ^^^ item) 0uL
             |> (^^^) (if board.ActiveColor = Color.Black then generator.Black else 0uL)
-            |> (^^^) (Encode.castling generator board)
-            |> (^^^) (match board.EnPassant with | Some i -> Array.get generator.EnPassantFile (i &&& 7) | None -> 0uL)
 
         let encodeMove generator hash oldBoard newBoard move =
             let oldPosition = 
@@ -128,7 +112,7 @@ namespace SpellChess.Chess
                 | Color.White -> generator.WhitePositions
                 | _ -> generator.BlackPositions
                 |> fun x -> x.[move.Source]
-                |> Hexuple.toArray
+                |> Pentuple.toArray
                 |> Array.get <| int (Piece.pieceType move.Piece)
 
             let newPosition =
@@ -136,7 +120,7 @@ namespace SpellChess.Chess
                 | Color.White -> generator.WhitePositions
                 | _ -> generator.BlackPositions
                 |> fun x -> x.[move.Target]
-                |> Hexuple.toArray
+                |> Pentuple.toArray
                 |> fun x ->
                     match move.Flags with
                     | Promotion target | CapturePromotion (_, target) -> Array.get x  (int (Piece.pieceType target))
@@ -144,42 +128,26 @@ namespace SpellChess.Chess
 
             let capturedPiece = 
                 match move.Flags with
-                | Normal | Promotion _ | Castle _ -> 0uL
+                | Normal | Promotion _ -> 0uL
                 | Capture enemyPiece  | CapturePromotion (enemyPiece, _) -> 
                     match newBoard.ActiveColor with
                     | Color.White -> generator.WhitePositions
                     | _ -> generator.BlackPositions
                     |> fun x -> x.[move.Target]
-                    |> Hexuple.toArray
+                    |> Pentuple.toArray
                     |> Array.get <| int (Piece.pieceType enemyPiece)
-                | EnPassant -> 
-                    match newBoard.ActiveColor with
-                    | Color.White -> generator.WhitePositions.[(move.Source &&& ~~~7) + (move.Target &&& 7)]
-                    | _ -> generator.BlackPositions.[(move.Source &&& ~~~7) + (move.Target &&& 7)]
-                    |> Hexuple.toArray
-                    |> Array.get <| int PieceType.Pawn
-            
-            let oldCastle = Encode.castling generator oldBoard
-            let newCastle = Encode.castling generator newBoard
-
-            let oldPassant = 
-                match oldBoard.EnPassant with 
-                | None -> 0uL
-                | Some i -> generator.EnPassantFile.[i &&& 7]
-
-            let newPassant = 
-                match newBoard.EnPassant with
-                | None -> 0uL
-                | Some i -> generator.EnPassantFile.[i &&& 7]
+                | Place -> 
+                    match oldBoard.ActiveColor with
+                    | Color.White -> generator.WhitePositions
+                    | _ -> generator.BlackPositions
+                    |> fun x -> x.[move.Target]
+                    |> Pentuple.toArray
+                    |> fun x -> Array.get x (int (Piece.pieceType move.Piece))
 
             hash
             |> (^^^) oldPosition
             |> (^^^) newPosition
             |> (^^^) capturedPiece
-            |> (^^^) oldCastle
-            |> (^^^) newCastle
-            |> (^^^) oldPassant
-            |> (^^^) newPassant
             |> (^^^) generator.Black
 
         let createTable seed =

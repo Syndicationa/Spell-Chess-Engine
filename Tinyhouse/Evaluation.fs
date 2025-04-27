@@ -1,11 +1,10 @@
-namespace SpellChess.Chess
+namespace SpellChess.Tinyhouse
     module Evaluate = 
         let pieceValue piece =
             match piece with
-            | PieceType.Queen -> 90
-            | PieceType.Rook -> 50
-            | PieceType.Bishop -> 30
-            | PieceType.Knight -> 30
+            | PieceType.Wazir -> 30
+            | PieceType.Ferz -> 20
+            | PieceType.Xiangqi -> 20
             | PieceType.Pawn -> 10
             | _ -> 0
 
@@ -32,6 +31,7 @@ namespace SpellChess.Chess
             | Promotion target -> promotionValue target
             | CapturePromotion (captured, promotion) -> 
                 captureValue move.Piece captured + promotionValue promotion
+            | Place -> pieceValue (Piece.pieceType move.Piece)
             | _ -> 0
 
         let determineCheck board =
