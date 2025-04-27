@@ -90,7 +90,12 @@ namespace SpellChess.Tinyhouse
             | Capture taken | CapturePromotion (taken, _) ->
                 let oldPlayer = Board.getPlayer board
                 let player = {oldPlayer with Placeables = Array.copy oldPlayer.Placeables}
-                let index = int (Piece.originalType taken ) - 1
+                let index = int (Piece.originalType taken ) - 2
+                if index < 0 then 
+                    printfn "Something bad happened %s %s" (toString move) (Piece.toString taken)
+                    board
+                else 
+                printfn "Index: %i" index
                 Array.get player.Placeables index
                 |> (+) 1
                 |> Array.set player.Placeables index
@@ -175,7 +180,7 @@ namespace SpellChess.Tinyhouse
             let new_rank = (position >>> 2) + d_rank
             let new_file = (position &&& 3) + d_file
 
-            if new_rank > 7 || new_rank < 0 || new_file > 7 || new_file < 0 || depth = 0 then false
+            if new_rank > 3 || new_rank < 0 || new_file > 3 || new_file < 0 || depth = 0 then false
             else
 
             match (new_rank <<< 2) + new_file with
@@ -183,47 +188,46 @@ namespace SpellChess.Tinyhouse
             | n when board.Board[n] = targetPiece -> true
             | _ -> false
         
-        let rec private squaresInDirection board position depth list (d_file, d_rank) =
+        let rec private squaresInDirection board position list (d_file, d_rank) =
             let new_rank = (position >>> 2) + d_rank
             let new_file = (position &&& 3) + d_file
 
-            if new_rank > 7 || new_rank < 0 || new_file > 7 || new_file < 0 || depth = 0 then list
+            if new_rank > 3 || new_rank < 0 || new_file > 3 || new_file < 0 then list
             else
 
             let color = board.ActiveColor
 
             match (new_rank <<< 2) + new_file with
-            | n when Piece.color board.Board.[n] = Color.Nil -> 
-                squaresInDirection board n (depth - 1) (n :: list) (d_file, d_rank)
             | n when Piece.color board.Board.[n] = color -> list
             | n -> n :: list
 
         let private linearMoves (board: Board) (location: int) (piece: Piece) =
-            let depth, list = 
+            let list = 
                 match enum (int piece &&& 7) with
-                | PieceType.King -> 1, kingDirections
-                | PieceType.Wazir -> 1, wazirDirections
-                | PieceType.Ferz -> 1, ferzDirections
-                | _ -> 0, []
+                | PieceType.King -> kingDirections
+                | PieceType.Wazir -> wazirDirections
+                | PieceType.Ferz -> ferzDirections
+                | _ -> []
 
             list
-            |> List.fold (squaresInDirection board location depth) []
+            |> List.fold (squaresInDirection board location) []
             |> generateNormalsAndCaptures board location piece
 
         let private xiangqiMoves (board: Board) (location: int) (piece: Piece): Move list =
             xiangqiDirectionPairs
-            |> List.fold (fun list ((dr, df), nextDirections) -> 
+            |> List.fold (fun list ((df, dr), nextDirections) -> 
                 let new_rank = (location >>> 2) + dr
                 let new_file = (location &&& 3) + df
 
-                if new_rank > 7 || new_rank < 0 || new_file > 7 || new_file < 0 then list
+                if new_rank > 3 || new_rank < 0 || new_file > 3 || new_file < 0 then list
                 else
 
                 match (new_rank <<< 2) + new_file with
                 | n when Piece.color board.Board.[n] = Color.Nil -> 
                     nextDirections
-                    |> List.fold (squaresInDirection board n 1) list
-                | n -> list
+                    |> List.fold (squaresInDirection board n) list
+                    |> fun x -> printfn "%i" (List.length x);x
+                | _ -> list
 
             ) []
             |> generateNormalsAndCaptures board location piece
@@ -232,11 +236,11 @@ namespace SpellChess.Tinyhouse
             let opponentXiangqi = Piece.generate board.ActiveColor PieceType.Xiangqi
             
             invertedXiangqiDirectionPairs
-            |> List.exists (fun ((dr, df), nextDirections) -> 
+            |> List.exists (fun ((df, dr), nextDirections) -> 
                 let new_rank = (location >>> 2) + dr
                 let new_file = (location &&& 3) + df
 
-                if new_rank > 7 || new_rank < 0 || new_file > 7 || new_file < 0 then false
+                if new_rank > 3 || new_rank < 0 || new_file > 3 || new_file < 0 then false
                 else
 
                 match (new_rank <<< 2) + new_file with
@@ -283,20 +287,17 @@ namespace SpellChess.Tinyhouse
             let pawn = board.Board.[location]
             let enemyColor = Color.oppositeColor board.ActiveColor
 
-            let direction, doubleRank, enPassantRank = 
+            let direction = 
                 match board.ActiveColor with
-                | Color.White -> 1, 1, 5
-                | Color.Black -> -1, 6, 4
-                | _ -> 0, -1, -1
+                | Color.White -> 1
+                | Color.Black -> -1
+                | _ -> 0
 
-
-            let rank = location >>> 3
             let file = location &&& 7
 
-            let forward = location + direction*8
+            let forward = location + direction*4
             let leftAttack = forward - 1
             let rightAttack = forward + 1
-            let forward2 = forward + direction*8
 
             let canMoveForward = board.Board.[forward] = 0uy
 
@@ -305,15 +306,10 @@ namespace SpellChess.Tinyhouse
                 && Piece.color board.Board.[leftAttack] = enemyColor
             
             let canAttackRight = 
-                file < 7
+                file < 3
                 && Piece.color board.Board.[rightAttack] = enemyColor
             
-            let canMove2 = 
-                doubleRank = rank 
-                && canMoveForward
-                && board.Board.[forward2] = 0uy
-
-            [canMoveForward, forward; canAttackLeft, leftAttack; canAttackRight, rightAttack; canMove2, forward2]
+            [canMoveForward, forward; canAttackLeft, leftAttack; canAttackRight, rightAttack]
             |> List.filter (fun (canMove, _) -> canMove)
             |> List.map (fun (_, location) -> location)
             |> generateNormalsAndCaptures board location pawn
@@ -326,22 +322,22 @@ namespace SpellChess.Tinyhouse
                 | Color.Black -> 1
                 | _ -> 0
 
-            let file = location &&& 7
+            let file = location &&& 3
 
-            let forward = location + direction*8
+            let forward = location + direction*4
             let leftAttack = forward - 1
             let rightAttack = forward + 1
 
             let canAttackLeft = 
-                file > 0 
+                file > 0
                 && leftAttack >= 0
-                && leftAttack < 64
+                && leftAttack < 16
                 && board.Board.[leftAttack] = targetPiece
             
             let canAttackRight = 
-                file < 7
+                file < 3
                 && rightAttack >= 0
-                && rightAttack < 64
+                && rightAttack < 16
                 && board.Board.[rightAttack] = targetPiece
 
             canAttackLeft || canAttackRight
@@ -351,14 +347,14 @@ namespace SpellChess.Tinyhouse
             |> Array.mapi (fun index count -> 
                     if count = 0 then None
                     else 
-                    let piece = Piece.generate board.ActiveColor (enum (index + 1))
+                    let piece = Piece.generate board.ActiveColor (enum (index + 2))
 
                     let invalidPawnRank = 
                         match board.ActiveColor with
                         | Color.White -> 3
                         | _ -> 0
                     
-                    if enum (index + 1) = PieceType.Pawn && location >>> 2 = invalidPawnRank then None
+                    if enum (index + 2) = PieceType.Pawn && location >>> 2 = invalidPawnRank then None
                     else Some {
                         Piece = piece
                         Source = location
@@ -379,8 +375,8 @@ namespace SpellChess.Tinyhouse
 
             findPawnCapture board oPawn location
             |> (||) (xiangqiCaptures board location)
-            |> (||) (List.exists (findCapture board oFerz location 8) ferzDirections)
-            |> (||) (List.exists (findCapture board oWazir   location 8) wazirDirections)
+            |> (||) (List.exists (findCapture board oFerz location 1) ferzDirections)
+            |> (||) (List.exists (findCapture board oWazir location 1) wazirDirections)
             |> (||) (List.exists (findCapture board oKing   location 1) kingDirections)
             |> not
 
@@ -401,7 +397,7 @@ namespace SpellChess.Tinyhouse
 
         let allValidMoves (board: Board) =
             fun (index: int) ->
-                if Piece.color board.Board.[index] <> Color.oppositeColor board.ActiveColor then -1 else index
+                if Piece.color board.Board.[index] = Color.oppositeColor board.ActiveColor then -1 else index
             |> List.init 16
             |> List.filter (fun i -> i >= 0)
             |> List.fold (fun list loc -> List.append list (validMoves board loc)) []

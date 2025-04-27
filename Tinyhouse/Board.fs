@@ -18,11 +18,12 @@ module Color =
         | _ -> Color.Nil
 
 type PieceType = 
-| King = 0
-| Wazir = 1
-| Ferz = 2
-| Xiangqi = 3
-| Pawn = 4
+| Nil = 0
+| King = 1
+| Wazir = 2
+| Ferz = 3
+| Xiangqi = 4
+| Pawn = 5
 
 type Piece = byte
 
@@ -247,7 +248,7 @@ module Board =
             let correctedRank = 3 - rank
             let piece = Piece.toString boardArray.[(correctedRank <<< 2) + file]
             if index &&& 3 = 0 then $"\n|-------------------------------|\n| %s{piece}| " else $"%s{piece}| "
-        |> String.init 64
+        |> String.init 16
         |> (+) <| "\n|-------------------------------|\n"
 
     let toString (board: Board) = 
