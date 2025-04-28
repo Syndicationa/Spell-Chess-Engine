@@ -47,12 +47,16 @@ namespace SpellChess.Tinyhouse
                 |> Option.defaultValue (File.A, Rank.One)
                 |> Location.toInt
 
-            let piece = board.Board.[sourceInt]
+            let piece = 
+                match sourceInt = targetInt, promotion with 
+                | true, Some promotion -> Piece.generate board.ActiveColor promotion
+                | _, _ -> board.Board.[sourceInt]
             let targetPiece = board.Board.[targetInt]
 
             let moveType =
                 match Piece.pieceType piece, targetPiece, promotion with
-                | PieceType.Pawn, 0uy, Some promotion -> Promotion (Piece.promote piece promotion)
+                | PieceType.Pawn, 0uy, Some promotion when promotion <> PieceType.Pawn -> Promotion (Piece.promote piece promotion)
+                | _, 0uy, Some _ -> Place
                 | _, 0uy, _ -> Normal
                 | PieceType.Pawn, target, Some promotion -> CapturePromotion (target, Piece.promote piece promotion)
                 | _, target, _ -> Capture target
@@ -91,6 +95,8 @@ namespace SpellChess.Tinyhouse
                 let oldPlayer = Board.getPlayer board
                 let player = {oldPlayer with Placeables = Array.copy oldPlayer.Placeables}
                 let index = int (Piece.originalType taken ) - 2
+                if index < 0 then board
+                else
                 Array.get player.Placeables index
                 |> (+) 1
                 |> Array.set player.Placeables index
@@ -104,6 +110,7 @@ namespace SpellChess.Tinyhouse
                 |> (-) 1
                 |> Array.set player.Placeables index
 
+                if Array.get player.Placeables index = Array.get oldPlayer.Placeables index then printfn "HELP!!!!!!!! %s" (toString move)
                 Board.setPlayer player board
 
         let private nextPlayer (board: Board) =
@@ -389,8 +396,11 @@ namespace SpellChess.Tinyhouse
             |> noCheck board
 
         let allValidMoves (board: Board) =
+            let isCheck = (Board.getPlayer board).KingLocation |> safeSquare board |> not
             fun (index: int) ->
-                if Piece.color board.Board.[index] = Color.oppositeColor board.ActiveColor then -1 else index
+                if Piece.color board.Board.[index] = Color.oppositeColor board.ActiveColor then -1
+                elif isCheck && Piece.color board.Board.[index] <> board.ActiveColor then -1
+                else index
             |> List.init 16
             |> List.filter (fun i -> i >= 0)
             |> List.fold (fun list loc -> List.append list (validMoves board loc)) []

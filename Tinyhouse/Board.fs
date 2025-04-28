@@ -157,10 +157,10 @@ module Board =
         let mutable wKing, bKing = -1, -1;
         let mutable idx = 12
 
-        let pieces, active, halfMove, fullMove = 
+        let pieces, active, whiteInventory, blackInventory, halfMove, fullMove = 
             match fen.Split ' ' with
-            | [|a;b;e;f|] -> a,b,e,f
-            | _ -> "a","b","e","f"
+            | [|board; active; white; black; half; full|] -> board, active, white, black, half, full
+            | _ -> "board","active","white","black","half","full"
 
         String.iter (fun char -> 
             if char = '/' then idx <- idx - 8
@@ -198,14 +198,32 @@ module Board =
         let HalfmoveCount = int halfMove
         let MoveCount = int fullMove
 
+        let WhitePlaceables = Array.init 4 (fun _ -> 0)
+        let BlackPlaceables = Array.init 4 (fun _ -> 0)
+
+        let matchToPlace array piece =
+            let index = 
+                match piece with 
+                | 'W' | 'w' -> 0
+                | 'F' | 'f' -> 1
+                | 'U' | 'u' -> 2
+                | 'P' | 'p' -> 3
+                | _ -> 0
+            Array.get array index
+            |> (+) 1
+            |> Array.set array index
+
+        String.iter (matchToPlace WhitePlaceables) whiteInventory
+        String.iter (matchToPlace BlackPlaceables) blackInventory
+
         let White = {
             KingLocation = wKing
-            Placeables = Array.init 4 (fun _ -> 0)
+            Placeables = WhitePlaceables
         }
 
         let Black = {
             KingLocation = bKing
-            Placeables = Array.init 4 (fun _ -> 0)
+            Placeables = BlackPlaceables
         }
 
         {

@@ -16,6 +16,7 @@
     <Compile Include="Tinyhouse\Move.fs" />
     <Compile Include="Tinyhouse\Transposition.fs" />
     <Compile Include="Tinyhouse\Evaluation.fs" />
+    <Compile Include="temporaryloops.fs" />
     
 
     <Compile Include="Display.fs" />
