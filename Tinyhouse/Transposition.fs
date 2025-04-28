@@ -53,13 +53,13 @@ namespace SpellChess.Tinyhouse
                     let pieces, nextSeed = Generator.makePositions seed
                     seed <- nextSeed
                     pieces
-                ) |> List.init 64
+                ) |> List.init 16
             let BlackPositions = 
                 (fun x -> 
                     let pieces, nextSeed = Generator.makePositions seed
                     seed <- nextSeed
                     pieces
-                ) |> List.init 64
+                ) |> List.init 16
             let Black = Random.generate seed
             let CastlingRights = 
                 Random.generate Black
@@ -113,7 +113,7 @@ namespace SpellChess.Tinyhouse
                 | _ -> generator.BlackPositions
                 |> fun x -> x.[move.Source]
                 |> Pentuple.toArray
-                |> Array.get <| int (Piece.pieceType move.Piece)
+                |> Array.get <| int (Piece.pieceType move.Piece) - 1
 
             let newPosition =
                 match oldBoard.ActiveColor with
@@ -123,8 +123,8 @@ namespace SpellChess.Tinyhouse
                 |> Pentuple.toArray
                 |> fun x ->
                     match move.Flags with
-                    | Promotion target | CapturePromotion (_, target) -> Array.get x  (int (Piece.pieceType target))
-                    | _ -> Array.get x (int (Piece.pieceType move.Piece))
+                    | Promotion target | CapturePromotion (_, target) -> Array.get x  (int (Piece.pieceType target) - 1)
+                    | _ -> Array.get x (int (Piece.pieceType move.Piece) - 1)
 
             let capturedPiece = 
                 match move.Flags with
@@ -135,14 +135,14 @@ namespace SpellChess.Tinyhouse
                     | _ -> generator.BlackPositions
                     |> fun x -> x.[move.Target]
                     |> Pentuple.toArray
-                    |> Array.get <| int (Piece.pieceType enemyPiece)
+                    |> Array.get <| int (Piece.pieceType enemyPiece) - 1
                 | Place -> 
                     match oldBoard.ActiveColor with
                     | Color.White -> generator.WhitePositions
                     | _ -> generator.BlackPositions
                     |> fun x -> x.[move.Target]
                     |> Pentuple.toArray
-                    |> fun x -> Array.get x (int (Piece.pieceType move.Piece))
+                    |> fun x -> Array.get x (int (Piece.pieceType move.Piece) - 1)
 
             hash
             |> (^^^) oldPosition

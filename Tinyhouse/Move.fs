@@ -91,11 +91,6 @@ namespace SpellChess.Tinyhouse
                 let oldPlayer = Board.getPlayer board
                 let player = {oldPlayer with Placeables = Array.copy oldPlayer.Placeables}
                 let index = int (Piece.originalType taken ) - 2
-                if index < 0 then 
-                    printfn "Something bad happened %s %s" (toString move) (Piece.toString taken)
-                    board
-                else 
-                printfn "Index: %i" index
                 Array.get player.Placeables index
                 |> (+) 1
                 |> Array.set player.Placeables index
@@ -104,7 +99,7 @@ namespace SpellChess.Tinyhouse
                 let oldPlayer = Board.getPlayer board
                 let player = {oldPlayer with Placeables = Array.copy oldPlayer.Placeables}
 
-                let index = int (Piece.pieceType move.Piece) - 1
+                let index = int (Piece.pieceType move.Piece) - 2
                 Array.get player.Placeables index
                 |> (-) 1
                 |> Array.set player.Placeables index
@@ -176,16 +171,15 @@ namespace SpellChess.Tinyhouse
             }
             |> List.map
 
-        let rec private findCapture board targetPiece position depth (d_file, d_rank) =
+        let rec private findCapture board targetPiece position (d_file, d_rank) =
             let new_rank = (position >>> 2) + d_rank
             let new_file = (position &&& 3) + d_file
 
-            if new_rank > 3 || new_rank < 0 || new_file > 3 || new_file < 0 || depth = 0 then false
+            if new_rank > 3 || new_rank < 0 || new_file > 3 || new_file < 0 then false
             else
 
             match (new_rank <<< 2) + new_file with
-            | n when Piece.color board.Board.[n] = Color.Nil -> findCapture board targetPiece n (depth - 1) (d_file, d_rank)
-            | n when board.Board[n] = targetPiece -> true
+            | n when board.Board[n] &&& 31uy = targetPiece -> true
             | _ -> false
         
         let rec private squaresInDirection board position list (d_file, d_rank) =
@@ -226,7 +220,6 @@ namespace SpellChess.Tinyhouse
                 | n when Piece.color board.Board.[n] = Color.Nil -> 
                     nextDirections
                     |> List.fold (squaresInDirection board n) list
-                    |> fun x -> printfn "%i" (List.length x);x
                 | _ -> list
 
             ) []
@@ -246,7 +239,7 @@ namespace SpellChess.Tinyhouse
                 match (new_rank <<< 2) + new_file with
                 | n when Piece.color board.Board.[n] = Color.Nil -> 
                     nextDirections
-                    |> List.exists (findCapture board opponentXiangqi n 1)
+                    |> List.exists (findCapture board opponentXiangqi n)
                 | _ -> false
             )
 
@@ -275,11 +268,11 @@ namespace SpellChess.Tinyhouse
         let private checkThenGeneratePromotions (board: Board) (location: int) (moves: Move list) =
             let promotionRank = 
                 match board.ActiveColor with
-                | Color.White -> 6
+                | Color.White -> 2
                 | Color.Black -> 1
                 | _ -> -1
             
-            if location >>> 3 <> promotionRank then moves
+            if location >>> 2 <> promotionRank then moves
             else 
             generatePromotions [] moves
 
@@ -293,7 +286,7 @@ namespace SpellChess.Tinyhouse
                 | Color.Black -> -1
                 | _ -> 0
 
-            let file = location &&& 7
+            let file = location &&& 3
 
             let forward = location + direction*4
             let leftAttack = forward - 1
@@ -375,9 +368,9 @@ namespace SpellChess.Tinyhouse
 
             findPawnCapture board oPawn location
             |> (||) (xiangqiCaptures board location)
-            |> (||) (List.exists (findCapture board oFerz location 1) ferzDirections)
-            |> (||) (List.exists (findCapture board oWazir location 1) wazirDirections)
-            |> (||) (List.exists (findCapture board oKing   location 1) kingDirections)
+            |> (||) (List.exists (findCapture board oFerz location) ferzDirections)
+            |> (||) (List.exists (findCapture board oWazir location) wazirDirections)
+            |> (||) (List.exists (findCapture board oKing   location) kingDirections)
             |> not
 
         let private noCheck (board: Board) =

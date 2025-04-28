@@ -46,7 +46,7 @@ module Piece =
         else pieceType piece
 
     let toString piece =
-        match piece with
+        match piece &&& 31uy with
             | p when p = generate Color.White PieceType.King -> "K "
             | p when p = generate Color.Black PieceType.King -> "k "
 
