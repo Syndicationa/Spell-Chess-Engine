@@ -18,6 +18,11 @@ namespace SpellChess.Tinyhouse
             )
             |> Array.fold <| (0, 0)
 
+        let private inventoryValue (player: Player) =
+            Array.mapi (fun index count -> pieceValue (enum (index + 2)) * count) player.Placeables
+            |> Array.sum
+            |> (/) <| 2
+
         let private captureValue capturingPiece targetPiece =
             10 * pieceValue (Piece.pieceType targetPiece) - pieceValue (Piece.pieceType capturingPiece)
 
@@ -56,10 +61,12 @@ namespace SpellChess.Tinyhouse
             if determineMate board then 1200000000
             else 
             let white, black = boardValue board.Board
+            let whiteInventory = inventoryValue board.White
+            let blackInventory = inventoryValue board.Black
 
             match board.ActiveColor with
-            | Color.White -> white - black
-            | Color.Black -> black - white
+            | Color.White -> white + whiteInventory - (black + blackInventory)
+            | Color.Black -> black + blackInventory - (white + whiteInventory)
             | _ -> -3000
 
     module Search =
@@ -71,33 +78,6 @@ namespace SpellChess.Tinyhouse
         let rec alphaBetaNegaMax (stopwatch: Stopwatch) timeLimit (table: TranspositionTable) board hash alpha beta depth =
             if stopwatch.ElapsedMilliseconds >= timeLimit then System.Int32.MaxValue
             else
-            
-            let previousScore = 
-                match Transposition.tryLookup table hash with 
-                | Some eval when eval.Depth >= depth ->
-                    match eval.Type with
-                    | Exact -> Some eval.Score
-                    | Lower when eval.Score >= beta -> Some eval.Score
-                    | Upper when eval.Score <= alpha -> Some eval.Score
-                    | _ -> None
-                | _ -> None
-            
-            if Option.isSome previousScore then 
-                previousScore
-                |> Option.defaultValue System.Int32.MinValue
-            elif depth = 0 then 
-                let eval = Evaluate.evaluate board
-                Transposition.save table {
-                        Encoding = hash
-                        Depth = depth - 1
-                        Score = eval
-                        Type = Exact
-                        Age = board.MoveCount
-                }
-                eval
-            else
-
-            // evilNumber <- evilNumber + 1
 
             let rec loopThroughAllMoves alpha beta bestValue moveList =
                 match moveList with
@@ -106,10 +86,15 @@ namespace SpellChess.Tinyhouse
                     let newHash: uint64 = Transposition.encodeMove table.Generator hash board newBoard move
 
                     let score = - alphaBetaNegaMax stopwatch timeLimit table newBoard newHash -beta -alpha (depth - 1)
-                    // if debug then printfn "%s %s %i" (String.replicate (6 - depth) "  ") (Move.toString move) score
+                    // printfn "%s %s %i" (String.replicate (10 - depth) "  ") (Move.toString move) score
                     let newBest = max score bestValue
                     let newAlpha = max score alpha
-                    
+
+                    if stopwatch.ElapsedMilliseconds >= timeLimit then System.Int32.MaxValue
+                    else
+
+                    if score >= beta then score
+                    else 
                     Transposition.save table {
                         Encoding = newHash
                         Depth = depth - 1
@@ -118,16 +103,38 @@ namespace SpellChess.Tinyhouse
                         Age = board.MoveCount
                     }
 
-                    if score >= beta then score
-                    else loopThroughAllMoves newAlpha beta newBest rest
+                    loopThroughAllMoves newAlpha beta newBest rest
                 | [] -> bestValue
-
-            Generate.allValidMoves board
-            |> sortMoves
-            |> function
-                | [] when not (Evaluate.determineCheck board) || board.MoveCount > 50 -> 0
-                | [] -> -1200000000 - depth
-                | list -> loopThroughAllMoves alpha beta -System.Int32.MaxValue list
+            
+            let previousScore = 
+                match Transposition.tryLookup table hash with 
+                | Some eval when eval.Depth > depth ->
+                    match eval.Type with
+                    | Exact -> Some eval.Score
+                    | Lower when eval.Score >= beta -> Some eval.Score
+                    | Upper when eval.Score <= alpha -> Some eval.Score
+                    | _ -> None
+                | _ -> None
+            
+            match previousScore, depth with
+            | Some n, _ -> n
+            | None, 0 -> 
+                let eval = Evaluate.evaluate board
+                Transposition.save table {
+                        Encoding = hash
+                        Depth = depth
+                        Score = eval
+                        Type = Exact
+                        Age = board.MoveCount
+                }
+                eval
+            | None, _ ->
+                Generate.allValidMoves board
+                |> sortMoves
+                |> function
+                    | [] when not (Evaluate.determineCheck board) || board.MoveCount > 50 -> 0
+                    | [] -> 1200000000 + depth
+                    | list -> loopThroughAllMoves alpha beta -System.Int32.MaxValue list
 
         let findBestMove (transposition: TranspositionTable) board length =
             let boardHash = Transposition.encodeBoard transposition.Generator board
@@ -138,7 +145,7 @@ namespace SpellChess.Tinyhouse
                 |> List.toArray
                 |> Array.map (fun x -> Evaluate.prescore x, x)
                 |> Array.sortBy fst
-            let mutable iterationDepth = 0
+            let mutable iterationDepth = 1
             let mutable alpha = -System.Int32.MaxValue
             let mutable beta = System.Int32.MaxValue
             let mutable bestScore = - System.Int32.MaxValue
@@ -164,8 +171,6 @@ namespace SpellChess.Tinyhouse
 
                     if stopwatch.ElapsedMilliseconds >= length then previousScore, move
                     else
-
-                    // printfn "Score of %s is %i at depth %i" (Move.toString move) score iterationDepth
 
                     if score > currentBestScore then
                         currentBestScore <- score
@@ -194,6 +199,7 @@ namespace SpellChess.Tinyhouse
 
             stopwatch.Stop()
             printfn "Searched to a depth of %i taking %i" iterationDepth stopwatch.ElapsedMilliseconds
+            Array.iter (fun (score, move) -> printfn "Score of %s is %i at depth %i" (Move.toString move) score iterationDepth) moveList
             
             transposition, (bestScore, bestMove)
 
