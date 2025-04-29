@@ -348,10 +348,6 @@ namespace SpellChess.Tinyhouse
             |> Array.mapi (fun index count -> 
                     if count <= 0 then None
                     else 
-                    if location = 0 then 
-                        printfn "%i %i %i" index count location
-                        Array.iter (fun x -> printf " %i" x) board.White.Placeables
-                        printfn "\n"
                     let piece = Piece.generate board.ActiveColor (enum (index + 2))
 
                     let invalidPawnRank = 

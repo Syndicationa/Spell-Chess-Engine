@@ -133,7 +133,7 @@ namespace SpellChess.Tinyhouse
                 |> sortMoves
                 |> function
                     | [] when not (Evaluate.determineCheck board) || board.MoveCount > 50 -> 0
-                    | [] -> 1200000000 + depth
+                    | [] -> - 1200000000 - depth
                     | list -> loopThroughAllMoves alpha beta -System.Int32.MaxValue list
 
         let findBestMove (transposition: TranspositionTable) board length =
@@ -191,7 +191,7 @@ namespace SpellChess.Tinyhouse
 
                 moveList <- Array.sortByDescending fst moveList
                 bestScore <- fst moveList.[0]
-                printfn "Best score at %i %i" iterationDepth bestScore
+                // printfn "Best score at %i %i" iterationDepth bestScore
                 bestMove <- snd moveList.[0]
 
                 if stopwatch.ElapsedMilliseconds < length then
