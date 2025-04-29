@@ -29,102 +29,18 @@ module Program =
 
     [<EntryPoint>]
     let main(args: string[]) =
-        System.Console.OutputEncoding <- System.Text.Encoding.UTF8
+        Common.encodingCorrection ()
         
-        let board = Chess.Board.create "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+        Tinyhouse.Run.humanContest Tinyhouse.Color.Black
 
-        let moveRegex =  Regex "([a-h][1-8])([a-h][1-8])(?:=([QRBN]))?"
+        // let board = Tinyhouse.Board.create "1uw1/1Puk/1pF1/K1W1 w - - 0 0"
 
-        let piece (str: string) =
-            match str with
-            | "K" | "k" -> Chess.PieceType.King
-            | "Q" | "q" -> Chess.PieceType.Queen
-            | "R" | "r" -> Chess.PieceType.Rook
-            | "B" | "b" -> Chess.PieceType.Bishop
-            | "N" | "n" -> Chess.PieceType.Knight
-            | "" -> Chess.PieceType.Pawn
-            | _ -> Chess.PieceType.Pawn
+        // if board.ActiveColor = Tinyhouse.Color.White then printfn "Yes"
 
-        let kingSideCastle (human: Chess.Color): Chess.Move = 
-            let king = match human with
-                        | Chess.Color.White -> "e1"
-                        | Chess.Color.Black -> "e8"
-                        | _ -> "a1"
-                        |> Chess.Location.fromString
-                        |> Option.map Chess.Location.toInt
-                        |> Option.defaultValue -1
-            {
-                Piece = Chess.Piece.generate human Chess.PieceType.King
-                Source = king
-                Target = king + 2
-                Flags = Chess.MoveType.Castle Chess.CastleDirection.KingSide
-            }
+        // Tinyhouse.Evaluate.determineCheck board
+        // |> printfn "%b"
+
         
-        let queenSideCastle (human: Chess.Color): Chess.Move = 
-            let king = match human with
-                        | Chess.Color.White -> "e1"
-                        | Chess.Color.Black -> "e8"
-                        | _ -> "a1"
-                        |> Chess.Location.fromString
-                        |> Option.map Chess.Location.toInt
-                        |> Option.defaultValue -1
-            {
-                Piece = Chess.Piece.generate human Chess.PieceType.King
-                Source = king
-                Target = king - 2
-                Flags = Chess.MoveType.Castle Chess.CastleDirection.QueenSide
-            }
-
-        let secTup f (a, b) =
-            a, f b
-
-        let readInput human board str =
-            if str = "O-O" then Some (kingSideCastle human)
-            elif str = "O-O-O" then Some (queenSideCastle human)
-            else
-            str
-            |> moveRegex.Match
-            |> fun m -> [for g in m.Groups do g.Value]
-            |> fun list -> 
-                match list with
-                | [move; source; target; promotion] ->
-                    let promotionType = 
-                        match piece promotion with
-                        | Chess.PieceType.Pawn -> None
-                        | value -> Some value
-                    Some (Chess.Move.fromString source target promotionType board)
-                | _ -> None
-
-        let rec temporaryGameLoop human (transposition: Chess.Transposition.Table, board) =
-            if List.length (Chess.Generate.allValidMoves board) = 0 then "Game Over\n" + Chess.Board.toString board else
-            printfn "Size of Table %i" transposition.Table.Count
-
-            if board.ActiveColor = human then
-                Chess.Board.toString board
-                |> printfn "%s"
-
-                System.Console.ReadLine()
-                |> readInput human board
-                |> Option.map (Chess.Move.move board)
-                |> Option.defaultValue board
-                |> fun x -> transposition, x
-                //Do Human Stuff
-            else
-                let stopwatch = System.Diagnostics.Stopwatch.StartNew()
-                Chess.Search.findBestMove transposition board 1000
-                |> fun x -> 
-                    stopwatch.Stop()
-                    printfn "Move took: %i" stopwatch.ElapsedMilliseconds
-                    x
-                |> secTup (fun (score, m) -> printfn "Black played: %s scored at %i" (Chess.Move.toString m) score; m)
-                |> secTup (Chess.Move.move board)
-            |> temporaryGameLoop human
-
-        let transpositionTable = Chess.Transposition.createTable 30241uL
-
-        temporaryGameLoop Chess.Color.White (transpositionTable, board)
-        |> printfn "%s"
-
         0
         // AppBuilder
         //     .Configure<App>()
