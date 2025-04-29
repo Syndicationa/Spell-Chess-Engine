@@ -208,7 +208,9 @@ module Board =
                 | 'F' | 'f' -> 1
                 | 'U' | 'u' -> 2
                 | 'P' | 'p' -> 3
-                | _ -> 0
+                | _ -> -1
+            if index < 0 then ()
+            else
             Array.get array index
             |> (+) 1
             |> Array.set array index

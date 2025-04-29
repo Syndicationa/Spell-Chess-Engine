@@ -106,14 +106,16 @@ namespace SpellChess.Tinyhouse
                 let player = {oldPlayer with Placeables = Array.copy oldPlayer.Placeables}
 
                 let index = int (Piece.pieceType move.Piece) - 2
-                Array.get player.Placeables index
-                |> (-) 1
-                |> Array.set player.Placeables index
+                let count = Array.get player.Placeables index
+                Array.set player.Placeables index (count - 1)
 
-                if Array.get player.Placeables index = Array.get oldPlayer.Placeables index then printfn "HELP!!!!!!!! %s" (toString move)
+                if Array.get player.Placeables index < 0 then 
+                    printfn "HELP!!!!!!!! %s %i" (toString move) index
+                    Array.iter (fun x -> printf " %i" x) player.Placeables
+                    (1/0) |> ignore
                 Board.setPlayer player board
 
-        let private nextPlayer (board: Board) =
+        let nextPlayer (board: Board) =
             let nextPlayer, moveCount = 
                 match board.ActiveColor with
                 | Color.White -> Color.Black, board.MoveCount
@@ -228,12 +230,11 @@ namespace SpellChess.Tinyhouse
                     nextDirections
                     |> List.fold (squaresInDirection board n) list
                 | _ -> list
-
             ) []
             |> generateNormalsAndCaptures board location piece
 
         let private xiangqiCaptures (board: Board) (location: int): bool =
-            let opponentXiangqi = Piece.generate board.ActiveColor PieceType.Xiangqi
+            let opponentXiangqi = Piece.generate (Color.oppositeColor board.ActiveColor) PieceType.Xiangqi
             
             invertedXiangqiDirectionPairs
             |> List.exists (fun ((df, dr), nextDirections) -> 
@@ -318,8 +319,8 @@ namespace SpellChess.Tinyhouse
         let private findPawnCapture board targetPiece location =
             let direction: int = 
                 match board.ActiveColor with
-                | Color.White -> -1
-                | Color.Black -> 1
+                | Color.White -> 1
+                | Color.Black -> -1
                 | _ -> 0
 
             let file = location &&& 3
@@ -345,8 +346,12 @@ namespace SpellChess.Tinyhouse
         let private placePieces board (location: int) =
             (Board.getPlayer board).Placeables
             |> Array.mapi (fun index count -> 
-                    if count = 0 then None
+                    if count <= 0 then None
                     else 
+                    if location = 0 then 
+                        printfn "%i %i %i" index count location
+                        Array.iter (fun x -> printf " %i" x) board.White.Placeables
+                        printfn "\n"
                     let piece = Piece.generate board.ActiveColor (enum (index + 2))
 
                     let invalidPawnRank = 
@@ -367,10 +372,10 @@ namespace SpellChess.Tinyhouse
             |> List.map Option.get
 
         let safeSquare (board: Board) (location: int) =
-            let oPawn = Piece.generate board.ActiveColor PieceType.Pawn
-            let oFerz = Piece.generate board.ActiveColor PieceType.Ferz
-            let oWazir = Piece.generate board.ActiveColor PieceType.Wazir
-            let oKing = Piece.generate board.ActiveColor PieceType.King
+            let oPawn = Piece.generate (Color.oppositeColor board.ActiveColor) PieceType.Pawn
+            let oFerz = Piece.generate (Color.oppositeColor board.ActiveColor) PieceType.Ferz
+            let oWazir = Piece.generate (Color.oppositeColor board.ActiveColor) PieceType.Wazir
+            let oKing = Piece.generate (Color.oppositeColor board.ActiveColor) PieceType.King
 
 
             findPawnCapture board oPawn location
@@ -382,8 +387,8 @@ namespace SpellChess.Tinyhouse
 
         let private noCheck (board: Board) =
             fun (move: Move) -> 
-                let nextBoard = Move.move board move
-                safeSquare nextBoard (Board.getOpponent nextBoard).KingLocation 
+                let nextBoard = Move.move board move |> Move.nextPlayer
+                safeSquare nextBoard (Board.getPlayer nextBoard).KingLocation 
             |> List.filter
         
         let validMoves (board: Board) (intLoc: int) =
