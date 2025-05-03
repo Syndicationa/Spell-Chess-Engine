@@ -1,9 +1,5 @@
 namespace SpellChess.Tinyhouse
 
-module Pentuple =
-    let toArray (a, b, c, d, e) = [|a; b; c; d; e|]
-    let toList (a, b, c, d, e) = [a; b; c; d; e]
-
 type Color = 
     | Nil = 0
     | White = 8
@@ -63,55 +59,6 @@ module Piece =
             | p when p = generate Color.Black PieceType.Pawn -> "♟ "
 
             | _ -> "  "
-
-type BitBoard = uint64
-module BitBoard =
-    let getLSB (bitBoard: BitBoard) =
-        bitBoard &&& ~~~bitBoard + 1UL // isolates the LSB
-        |> System.Numerics.BitOperations.TrailingZeroCount
-
-    let private sumOfANDandShiftedAND andNum shiftCount n  = 
-        (n &&& andNum) + (n >>> shiftCount &&& andNum)
-
-    let pieceCount = 
-        sumOfANDandShiftedAND 0x5555555555555555uL 1
-        >> sumOfANDandShiftedAND 0x3333333333333333uL 2
-        >> sumOfANDandShiftedAND 0x0F0F0F0F0F0F0F0FuL 4
-        >> sumOfANDandShiftedAND 0x00FF00FF00FF00FFuL 8
-        >> sumOfANDandShiftedAND 0x0000FFFF0000FFFFuL 16
-        >> sumOfANDandShiftedAND 0x00000000FFFFFFFFuL 32
-
-type PieceBoards = BitBoard * BitBoard * BitBoard * BitBoard * BitBoard
-module PieceBoards =
-    let getBitBoard pieceType (pieces: PieceBoards) =
-        let king, wazir, ferz, xiangqi, pawn = pieces
-        match pieceType with 
-        | PieceType.King -> king
-        | PieceType.Wazir -> wazir
-        | PieceType.Ferz -> ferz
-        | PieceType.Xiangqi -> xiangqi
-        | PieceType.Pawn -> pawn
-        | _ -> 0uL
-
-    let setBitBoard piece pieces bitBoard =
-        let king, queen, wazir, ferz, xiangqi, pawn = pieces
-        match piece with 
-        | PieceType.King -> bitBoard, queen, wazir, ferz, xiangqi, pawn
-        | PieceType.Wazir -> king, queen, bitBoard, ferz, xiangqi, pawn
-        | PieceType.Ferz -> king, queen, wazir, bitBoard, xiangqi, pawn
-        | PieceType.Xiangqi -> king, queen, wazir, ferz, bitBoard, pawn
-        | PieceType.Pawn -> king, queen, wazir, ferz, xiangqi, bitBoard
-        | _ -> pieces
-
-    let getPieceAtLocation (pieces: PieceBoards) (location: int) =
-        let king, wazir, ferz, xiangqi, pawn = pieces
-        match 1uL <<< location with
-        | x when king &&& x <> 0uL -> Some PieceType.King
-        | x when wazir &&& x <> 0uL -> Some PieceType.Wazir
-        | x when ferz &&& x <> 0uL -> Some PieceType.Ferz
-        | x when xiangqi &&& x <> 0uL -> Some PieceType.Xiangqi
-        | x when pawn &&& x <> 0uL -> Some PieceType.Pawn
-        | x -> None
 
 type Player = {
     KingLocation: int
