@@ -147,7 +147,7 @@ namespace SpellChess.Tinyhouse
                     Some (Move.fromString source target promotionType board)
                 | _ -> None
 
-        let rec private temporaryGameLoop human (transposition: TranspositionTable, board) =
+        let rec private temporaryGameLoop human config (transposition: TranspositionTable, board) =
             if List.length (Generate.allValidMoves board) = 0 then "Game Over\n" + Board.toString board else
             printfn "Size of Table %i" transposition.Table.Count
 
@@ -168,16 +168,107 @@ namespace SpellChess.Tinyhouse
                 //Do Human Stuff
             else
                 let stopwatch = System.Diagnostics.Stopwatch.StartNew()
-                Search.findBestMove transposition board 3000
+                Search.findBestMove config transposition board 10000
                 |> fun x -> 
                     stopwatch.Stop()
                     printfn "Move took: %i" stopwatch.ElapsedMilliseconds
                     x
                 |> SpellChess.Common.secTup (fun (score, m) -> printfn "Computer played: %s aka %s scored at %i" (Move.toString m) (Move.toDirectString m) score; m)
                 |> SpellChess.Common.secTup (Move.move board)
-            |> temporaryGameLoop human
+            |> temporaryGameLoop human config
 
         let humanContest color =
             let transpositionTable = Transposition.createTable 4381645632uL
-            temporaryGameLoop color (transpositionTable, initialBoard)
+
+            let config = {
+                Wazir = 40
+                Ferz = 25
+                Xiangqi = 15
+                Pawn = 10
+                Inventory = fun x -> x / 2
+            }
+
+            temporaryGameLoop color config (transpositionTable, initialBoard)
             |> printfn "%s"
+
+        let configA = {
+            Wazir = 10
+            Ferz = 30
+            Xiangqi = 10
+            Pawn = 10
+            Inventory = fun x -> x * 2
+        }
+
+        let configB = {
+            Wazir = 10
+            Ferz = 10
+            Xiangqi = 10
+            Pawn = 10
+            Inventory = fun x -> x * 2
+        }
+
+        type outcome = 
+        | Win
+        | Draw
+        | Loss
+
+        let add (w,d,l) = function
+        | Win -> w + 1, d, l
+        | Draw -> w, d + 1, l
+        | Loss -> w, d, l + 1
+
+        let rec private computerLoop a (transpositionA: TranspositionTable, transpositionB, board) =
+            if Evaluate.determineMate board then
+                if board.ActiveColor = a then Loss else Win
+            elif Evaluate.determineStalemate board then
+                Draw
+            else
+
+            // printfn "Count: %i" board.MoveCount
+
+            let config = if a = board.ActiveColor then configA else configB
+            // let stopwatch = System.Diagnostics.Stopwatch.StartNew()
+
+            Search.findBestAtDepth config transpositionA board 2
+            |> SpellChess.Common.secTup snd
+            |> SpellChess.Common.secTup (Move.move board)
+            |> (fun (a, b) -> transpositionB, a, b)
+            |> computerLoop a
+
+        let computerContest () =
+            let stopwatch = System.Diagnostics.Stopwatch.StartNew()
+
+            let list =  List.init 100 (fun index -> Transposition.Random.generate (uint64 stopwatch.ElapsedMilliseconds + uint64 index + 1uL))
+
+            stopwatch.Stop()
+            let mutable count = 0
+            let percent = List.length list / 10
+
+            let win, draw, loss = 
+                List.fold (fun total seed -> 
+                    count <- count + 1
+
+                    // stopwatch.Restart()
+                    let transpositionA = Transposition.createTable seed
+                    let transpositionB = Transposition.createTable seed
+
+                    let whiteTotal = 
+                        computerLoop Color.White (transpositionA,transpositionB, initialBoard)
+                        |> add total
+
+                    // stopwatch.Stop()
+                    // printfn "\nGame a done\n"
+
+                    transpositionA.Table.Clear()
+                    transpositionB.Table.Clear()
+
+                    let ret =
+                        computerLoop Color.Black (transpositionB, transpositionA, initialBoard)
+                        |> add whiteTotal
+
+                    if count % percent = 0 then printfn "Completed: %i%%" (count*10 / percent)
+
+                    ret
+                ) (0,0,0) list
+
+            printfn "W: %i D: %i L: %i" win draw loss
